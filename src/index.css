@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body, #root { height: 100%; overflow: hidden; }
+  body { background: #07090d; color: #e6edf3; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #243447; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2d4052; }
+  ::selection { background: rgba(0,212,255,.18); color: #e6edf3; }
+}
+
+@layer components {
+  /* Buttons */
+  .btn { @apply inline-flex items-center gap-2 font-semibold rounded-lg transition-all duration-150 select-none whitespace-nowrap; }
+  .btn-primary  { @apply btn px-4 py-2 text-sm bg-accent text-bg hover:brightness-110 hover:-translate-y-px active:translate-y-0 shadow-lg shadow-accent/20; }
+  .btn-ghost    { @apply btn px-4 py-2 text-sm text-t2 border border-b1 hover:border-accent/50 hover:text-accent hover:bg-accent/5; }
+  .btn-danger   { @apply btn px-4 py-2 text-sm text-rose border border-rose/25  hover:bg-rose/15; }
+  .btn-violet   { @apply btn px-4 py-2 text-sm bg-violet text-white hover:brightness-110 hover:-translate-y-px shadow-lg shadow-violet/20; }
+  .btn-sm       { @apply !px-3 !py-1.5 !text-xs; }
+  .btn-lg       { @apply !px-5 !py-2.5 !text-base; }
+  .btn:disabled { @apply opacity-40 cursor-not-allowed !transform-none pointer-events-none; }
+
+  /* Cards */
+  .card         { @apply bg-surface border border-b1 rounded-xl overflow-hidden; }
+  .card-header  { @apply flex items-center justify-between px-5 py-3.5 border-b border-b1; }
+  .card-title   { @apply text-[10px] font-semibold tracking-[.1em] uppercase text-t3 font-mono; }
+  .card-body    { @apply p-5; }
+
+  /* Inputs */
+  .lbl          { @apply block text-[10px] font-semibold tracking-[.1em] uppercase text-t3 font-mono mb-1.5; }
+  .inp          { @apply w-full bg-s2 border border-b1 rounded-lg px-3.5 py-2.5 text-t1 text-sm font-mono outline-none transition-all placeholder:text-t3 focus:border-accent/60 focus:ring-1 focus:ring-accent/20; }
+  .sel          { @apply w-full bg-s2 border border-b1 rounded-lg px-3.5 py-2.5 text-t1 text-xs font-mono outline-none transition-all focus:border-accent/60 appearance-none cursor-pointer; }
+  .textarea     { @apply inp resize-y min-h-[120px] leading-relaxed; }
+
+  /* Badges */
+  .badge        { @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold font-mono; }
+  .badge-type1  { @apply badge bg-success/15 text-success border border-success/25; }
+  .badge-type2  { @apply badge bg-accent/15 text-accent border border-accent/25; }
+  .badge-type3  { @apply badge bg-amber/15 text-amber border border-amber/25; }
+  .badge-type4  { @apply badge bg-violet/15 text-violet border border-violet/25; }
+  .badge-green  { @apply badge bg-success/15 text-success; }
+  .badge-blue   { @apply badge bg-accent/15 text-accent; }
+  .badge-amber  { @apply badge bg-amber/15 text-amber; }
+  .badge-rose   { @apply badge bg-rose/15 text-rose; }
+
+  /* Section heading */
+  .section-h    { @apply flex items-center gap-3 text-sm font-semibold tracking-tight mb-5 text-t1 after:content-[''] after:flex-1 after:h-px after:bg-b1; }
+
+  /* Toggle */
+  .toggle-track { @apply relative w-9 h-5 rounded-full border border-b2 bg-s3 transition-all; }
+  .toggle-track:has(input:checked)  { @apply bg-accent/80 border-accent/60; }
+
+  /* Info box */
+  .info-box     { @apply flex gap-2.5 p-3.5 bg-accent/5 border border-accent/15 rounded-lg text-xs text-t2 font-mono leading-relaxed; }
+
+  /* Glow effects */
+  .glow-accent  { box-shadow: 0 0 20px rgba(0,212,255,.15); }
+  .glow-violet  { box-shadow: 0 0 20px rgba(139,92,246,.15); }
+}
