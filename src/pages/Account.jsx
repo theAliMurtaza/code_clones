@@ -6,8 +6,8 @@ const SB = { complete:'green', running:'blue', queued:'amber' }
 
 export default function Account() {
   const { projects, setPage, toast } = useApp()
-  const [name,  setName]  = useState('Ahmad Khalid')
-  const [email, setEmail] = useState('ahmad@university.edu')
+  const [name,  setName]  = useState('Ali Murtaza')
+  const [email, setEmail] = useState('ali@university.edu')
   const [auth,  setAuth]  = useState('email')
 
   return (
