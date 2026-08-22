@@ -1,0 +1,95 @@
+version: "3.9"
+
+# ── CloneScope full stack ────────────────────────────────────────────
+# NFR-07-01: Docker Compose for local and cloud deployment
+#
+# Services:
+#   api      — FastAPI backend
+#   worker   — Celery worker for large async jobs
+#   redis    — Embedding cache + Celery broker
+#   db       — PostgreSQL database
+#
+# Usage:
+#   docker compose up --build
+#   Visit: http://localhost:8000/docs
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       clonescope
+      POSTGRES_USER:     clonescope
+      POSTGRES_PASSWORD: clonescope
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clonescope"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI backend ──────────────────────────────────────────────────
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL:         postgresql://clonescope:clonescope@db:5432/clonescope
+      REDIS_URL:            redis://redis:6379/0
+      CELERY_BROKER_URL:    redis://redis:6379/1
+      CELERY_RESULT_URL:    redis://redis:6379/2
+    volumes:
+      - model_cache:/app/model_cache
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  # ── Celery worker (for large async detection jobs) ───────────────────
+  worker:
+    build: .
+    restart: unless-stopped
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
+    env_file: .env
+    environment:
+      DATABASE_URL:         postgresql://clonescope:clonescope@db:5432/clonescope
+      REDIS_URL:            redis://redis:6379/0
+      CELERY_BROKER_URL:    redis://redis:6379/1
+      CELERY_RESULT_URL:    redis://redis:6379/2
+    volumes:
+      - model_cache:/app/model_cache
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  model_cache:
