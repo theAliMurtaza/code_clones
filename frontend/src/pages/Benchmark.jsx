@@ -10,9 +10,9 @@ export default function Benchmark() {
       <div className="card p-6">
         <div className="card-title mb-5">CloneScope vs Baseline Tools (BigCloneBench)</div>
         <div className="flex items-center justify-around">
-          <MetricRing value={0.89} label="Precision" color="#10b981" size={90}/>
-          <MetricRing value={0.93} label="Recall"    color="#00d4ff" size={90}/>
-          <MetricRing value={0.91} label="F1-Score"  color="#f59e0b" size={90}/>
+          <MetricRing value={0.89} label="Precision" color="#059669" size={90}/>
+          <MetricRing value={0.93} label="Recall"    color="#2563eb" size={90}/>
+          <MetricRing value={0.91} label="F1-Score"  color="#d97706" size={90}/>
           <div className="text-center">
             <div className="text-3xl font-bold text-violet font-mono mb-1">4.2s</div>
             <div className="text-[10px] font-mono text-t3 uppercase tracking-wider">Avg Runtime</div>
@@ -35,23 +35,23 @@ export default function Benchmark() {
             {BENCHMARK_DATA.map(row => (
               <tr key={row.tool}
                 className={'border-b border-b1/50 transition-colors ' + (row.ours ? '' : 'hover:bg-s2/50')}
-                style={row.ours ? { background: 'rgba(0,212,255,.03)' } : {}}>
+                style={row.ours ? { background: 'rgba(37,99,235,.04)' } : {}}>
                 <td className={'px-5 py-3.5 font-semibold ' + (row.ours ? 'text-accent' : 'text-t1')}>
                   {row.tool}
                 </td>
                 <td className="px-5 py-3.5 text-t3 font-mono">{row.approach}</td>
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-b2 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: row.p*100+'%', background: row.ours?'#00d4ff':'#2a3449'}}/>
+                    <div className="w-16 h-1.5 bg-s3 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: row.p*100+'%', background: row.ours?'#2563eb':'#cbd5e1'}}/>
                     </div>
                     <span className={'font-mono font-bold ' + (row.ours?'text-accent':'text-t2')}>{row.p.toFixed(2)}</span>
                   </div>
                 </td>
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-b2 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: row.r*100+'%', background: row.ours?'#00d4ff':'#2a3449'}}/>
+                    <div className="w-16 h-1.5 bg-s3 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: row.r*100+'%', background: row.ours?'#2563eb':'#cbd5e1'}}/>
                     </div>
                     <span className={'font-mono font-bold ' + (row.ours?'text-accent':'text-t2')}>{row.r.toFixed(2)}</span>
                   </div>
@@ -78,7 +78,7 @@ export default function Benchmark() {
             { step:'4', title:'Type Classification', desc:'Token similarity + semantic probability together determine whether the pair is Type-1, 2, 3, or 4.' },
           ].map(s => (
             <div key={s.step} className="p-4 bg-s2 rounded-xl border border-b1">
-              <div className="w-7 h-7 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center
+              <div className="w-7 h-7 rounded-lg bg-accent/10 border border-accent/15 flex items-center justify-center
                 text-xs font-bold font-mono text-accent mb-3">{s.step}</div>
               <div className="text-xs font-semibold text-t1 mb-2">{s.title}</div>
               <div className="text-[11px] text-t3 leading-relaxed">{s.desc}</div>

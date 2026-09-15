@@ -40,15 +40,14 @@ class Settings(BaseSettings):
     # ── Detection thresholds ─────────────────────────────────────────
     # DEFAULT_THRESHOLD: minimum cosine similarity (embedding mode) or
     #   P(clone) (classifier mode) to flag a pair.
-    #
-    # 0.50 works well with embedding cosine similarity (no fine-tuning).
-    # Raise to 0.75 once you have a fine-tuned model.bin.
     DEFAULT_THRESHOLD: float = 0.50
 
-    TYPE1_TOKEN_SIM:   float = 0.97   # token sim for Type-1 (exact copy)
-    TYPE2_SEM_SIM:     float = 0.80   # semantic sim for Type-2
-    TYPE2_TOK_SIM:     float = 0.65   # token sim for Type-2
+    TYPE1_TOKEN_SIM:   float = 0.95   # token sim for Type-1 (exact copy)
+    TYPE2_SEM_SIM:     float = 0.75   # semantic sim for Type-2
+    TYPE2_TOK_SIM:     float = 0.60   # token sim for Type-2 (renamed identifiers)
     TYPE3_SEM_SIM:     float = 0.65   # semantic sim for Type-3
+    TYPE3_TOK_SIM:     float = 0.30   # token sim lower-bound for Type-3 (near-miss syntactic)
+    TYPE4_SEM_SIM:     float = 0.50   # semantic sim for Type-4 (pure semantic clone)
 
     # ── File handling ─────────────────────────────────────────────────
     MAX_FILE_SIZE_MB:    int = 10

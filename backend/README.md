@@ -7,7 +7,7 @@
 
 ```bash
 # 1. Enter backend directory
-cd clonescope-backend
+cd backend
 
 # 2. Create and activate virtual environment
 python -m venv venv
@@ -192,8 +192,8 @@ bash build.sh
 
 ## Connect React Frontend
 
-1. Copy `api_client.js` into your React project: `src/utils/api_client.js`
-2. Add to `clonescope/.env`:  `VITE_API_URL=http://localhost:8000`
+1. The React client already connects through `frontend/src/utils/api.js`.
+2. Add `VITE_API_URL=http://localhost:8000` to `frontend/.env` when needed.
 3. In `Upload.jsx`, on validate button click:
    ```js
    import { detectClones, pollJob } from '../utils/api_client'

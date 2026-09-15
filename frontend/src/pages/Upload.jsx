@@ -66,9 +66,9 @@ export default function Upload() {
             <input id="fileInput" type="file" multiple hidden
               accept=".py,.java"
               onChange={e => addFiles(e.target.files)} />
-            <div className="w-12 h-12 rounded-xl bg-s3 border border-b1 flex items-center justify-center
+            <div className="w-12 h-12 rounded-xl bg-s2 border border-b1 flex items-center justify-center
               mx-auto mb-4 group-hover:border-accent/30 transition-colors">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00d4ff"
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb"
                 strokeWidth="2" strokeLinecap="round">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
                 <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
@@ -79,7 +79,7 @@ export default function Upload() {
             <div className="flex gap-2 justify-center">
               {['.py','.java'].map(e => (
                 <span key={e} className="text-[9px] font-mono font-bold px-2 py-1 rounded
-                  bg-s3 border border-b1 text-t3">{e}</span>
+                  bg-s2 border border-b1 text-t3">{e}</span>
               ))}
             </div>
           </div>
@@ -90,7 +90,7 @@ export default function Upload() {
               {uploadedFiles.map((f, i) => (
                 <div key={i} className={'flex items-center gap-3 px-3.5 py-2.5 rounded-lg border ' +
                   (f.valid ? 'bg-s2 border-b1' : 'border-rose/20') }
-                  style={f.valid ? {} : { background: 'rgba(244,63,94,.05)' }}>
+                  style={f.valid ? {} : { background: 'rgba(225,29,72,.04)' }}>
                   <div className="w-8 h-8 rounded-lg bg-s3 flex items-center justify-center
                     text-[9px] font-bold font-mono text-accent flex-shrink-0">{f.ext}</div>
                   <div className="flex-1 min-w-0">
@@ -100,7 +100,7 @@ export default function Upload() {
                     </div>
                   </div>
                   <button onClick={() => removeFile(i)}
-                    className="text-t3 hover:text-rose transition-colors text-lg leading-none">x</button>
+                    className="text-t3 hover:text-rose transition-colors text-lg leading-none">×</button>
                 </div>
               ))}
             </div>
@@ -117,13 +117,13 @@ export default function Upload() {
               </div>
               <input type="range" min={50} max={99} value={Math.round(threshold * 100)}
                 onChange={e => setThreshold(Number(e.target.value) / 100)}
-                className="w-full h-1 rounded-full bg-b2 appearance-none cursor-pointer accent-accent"/>
+                className="w-full h-1 rounded-full bg-s3 appearance-none cursor-pointer accent-accent"/>
               <div className="flex justify-between text-[10px] font-mono text-t3 mt-1.5">
                 <span>50% — more pairs</span><span>99% — exact only</span>
               </div>
             </div>
 
-            <div className="p-3.5 bg-s3 rounded-xl border border-b1 space-y-2 text-[11px] font-mono text-t2">
+            <div className="p-3.5 bg-s2 rounded-xl border border-b1 space-y-2 text-[11px] font-mono text-t2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-success flex-shrink-0"/>
                 Supported: Python (.py) and Java (.java)
@@ -150,7 +150,7 @@ export default function Upload() {
             </svg>
             Run Clone Detection
             {uploadedFiles.filter(f => f.valid).length > 0 &&
-              <span className="ml-1 text-bg/70 font-normal">
+              <span className="ml-1 text-white/70 font-normal">
                 ({uploadedFiles.filter(f=>f.valid).length} file{uploadedFiles.filter(f=>f.valid).length>1?'s':''})
               </span>
             }

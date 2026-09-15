@@ -277,6 +277,19 @@ class GraphCodeBERTEngine:
     def predict_batch(self, pairs: list) -> list:
         if self._mock:
             return [self._mock_pair(a, b) for a, _, b, _ in pairs]
+        if not self.is_fine_tuned:
+            # When no fine-tuned classifier is loaded, use embedding cosine similarity
+            # to provide accurate semantic clone predictions instead of calling an untrained head.
+            ca_list = [p[0] for p in pairs]
+            la_list = [p[1] for p in pairs]
+            cb_list = [p[2] for p in pairs]
+            lb_list = [p[3] for p in pairs]
+            va = self.embed_batch(ca_list, la_list)
+            vb = self.embed_batch(cb_list, lb_list)
+            va_norm = va / (np.linalg.norm(va, axis=1, keepdims=True) + 1e-9)
+            vb_norm = vb / (np.linalg.norm(vb, axis=1, keepdims=True) + 1e-9)
+            sims = np.sum(va_norm * vb_norm, axis=1)
+            return [float(round(s, 6)) for s in sims]
         import torch
         probs = []
         for start in range(0, len(pairs), 8):

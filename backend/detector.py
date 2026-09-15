@@ -21,7 +21,7 @@ from sklearn.metrics.pairwise import cosine_similarity as cos_sim
 
 from config import get_settings
 from fragmenter import Fragment, extract_fragments
-from classifier import token_similarity, _clone_description
+from classifier import token_similarity, _clone_description, parameterized_token_similarity
 
 logger   = logging.getLogger(__name__)
 settings = get_settings()
@@ -112,15 +112,27 @@ def _candidates_brute(vectors: np.ndarray, threshold: float):
 
 # ── Clone type classifier ─────────────────────────────────────────────
 def _classify(prob: float, tok: float, threshold: float,
-              lang_a: str, lang_b: str) -> Optional[str]:
+              lang_a: str, lang_b: str,
+              code_a: str = "", code_b: str = "") -> Optional[str]:
     if prob < threshold:
         return None
+    if lang_a != lang_b:
+        return "Type-4"
     if tok >= settings.TYPE1_TOKEN_SIM:
         return "Type-1"
-    elif prob >= settings.TYPE2_SEM_SIM and tok >= settings.TYPE2_TOK_SIM:
+
+    param_tok = parameterized_token_similarity(code_a, code_b) if (code_a and code_b) else tok
+    lines_a = [l.strip() for l in code_a.splitlines() if l.strip()] if code_a else []
+    lines_b = [l.strip() for l in code_b.splitlines() if l.strip()] if code_b else []
+    same_stmt_count = (len(lines_a) == len(lines_b)) if (lines_a and lines_b) else False
+
+    # ── Type-2: structurally identical, identifiers/literals renamed
+    if same_stmt_count and (tok >= settings.TYPE2_TOK_SIM or param_tok >= 0.85) and prob >= settings.TYPE2_SEM_SIM:
         return "Type-2"
-    elif prob >= settings.TYPE3_SEM_SIM:
+    # ── Type-3: near-miss — syntactic modifications, substantial token overlap
+    elif (tok >= settings.TYPE3_TOK_SIM or param_tok >= 0.55) and prob >= settings.TYPE3_SEM_SIM:
         return "Type-3"
+    # ── Type-4: purely semantic equivalence (different syntax / implementation)
     else:
         return "Type-4"
 
@@ -223,7 +235,7 @@ def run_detection(
         frag_b = all_frags[j]
         tok    = token_similarity(frag_a.code, frag_b.code)
         cross  = frag_a.language != frag_b.language
-        ctype  = _classify(prob, tok, threshold, frag_a.language, frag_b.language)
+        ctype  = _classify(prob, tok, threshold, frag_a.language, frag_b.language, frag_a.code, frag_b.code)
         if ctype is None:
             continue
         result.clone_pairs.append(DetectedClone(

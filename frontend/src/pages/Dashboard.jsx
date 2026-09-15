@@ -10,18 +10,18 @@ export default function Dashboard() {
   useEffect(() => { refreshDashboard() }, [])
 
   const dist = dashStats ? [
-    { type: 'Type-1', n: dashStats.type_distribution?.['Type-1'] ?? 0, color: '#10b981' },
-    { type: 'Type-2', n: dashStats.type_distribution?.['Type-2'] ?? 0, color: '#00d4ff' },
-    { type: 'Type-3', n: dashStats.type_distribution?.['Type-3'] ?? 0, color: '#f59e0b' },
-    { type: 'Type-4', n: dashStats.type_distribution?.['Type-4'] ?? 0, color: '#8b5cf6' },
+    { type: 'Type-1', n: dashStats.type_distribution?.['Type-1'] ?? 0, color: '#059669' },
+    { type: 'Type-2', n: dashStats.type_distribution?.['Type-2'] ?? 0, color: '#2563eb' },
+    { type: 'Type-3', n: dashStats.type_distribution?.['Type-3'] ?? 0, color: '#d97706' },
+    { type: 'Type-4', n: dashStats.type_distribution?.['Type-4'] ?? 0, color: '#7c3aed' },
   ] : []
   const total = dist.reduce((a, d) => a + d.n, 0)
 
   const STATS = [
-    { label: 'Total Analyses',   value: dashStats?.total_jobs   ?? '—', color: '#00d4ff', sub: 'completed jobs' },
-    { label: 'Clone Pairs Found',value: dashStats?.total_pairs  ?? '—', color: '#8b5cf6', sub: 'across all analyses' },
-    { label: 'Code Fragments',   value: dashStats?.total_fragments ?? '—', color: '#00e5b0', sub: 'analyzed fragments' },
-    { label: 'Model',            value: 'GCB',                         color: '#f59e0b', sub: 'GraphCodeBERT' },
+    { label: 'Total Analyses',   value: dashStats?.total_jobs   ?? '—', color: '#2563eb', sub: 'completed jobs' },
+    { label: 'Clone Pairs Found',value: dashStats?.total_pairs  ?? '—', color: '#7c3aed', sub: 'across all analyses' },
+    { label: 'Code Fragments',   value: dashStats?.total_fragments ?? '—', color: '#059669', sub: 'analyzed fragments' },
+    { label: 'Model',            value: 'GCB',                         color: '#d97706', sub: 'GraphCodeBERT' },
   ]
 
   return (
@@ -111,7 +111,7 @@ export default function Dashboard() {
                       {Math.round((d.n / total) * 100)}%
                     </span>
                   </div>
-                  <div className="h-1.5 bg-b2 rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-s3 rounded-full overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${(d.n/total)*100}%`, background: d.color }}/>
                   </div>
                 </div>
@@ -123,10 +123,10 @@ export default function Dashboard() {
             <div className="px-3 pb-3 pt-1">
               <ResponsiveContainer width="100%" height={90}>
                 <BarChart data={WEEKLY_ACTIVITY} barSize={14}>
-                  <XAxis dataKey="day" tick={{ fontSize:9, fill:'#484f58', fontFamily:'monospace' }} axisLine={false} tickLine={false}/>
-                  <Tooltip contentStyle={{ background:'#131920', border:'1px solid #1e2d3d', borderRadius:8, fontSize:11, fontFamily:'monospace' }} cursor={{ fill:'rgba(255,255,255,.03)' }}/>
+                  <XAxis dataKey="day" tick={{ fontSize:9, fill:'#94a3b8', fontFamily:'monospace' }} axisLine={false} tickLine={false}/>
+                  <Tooltip contentStyle={{ background:'#ffffff', border:'1px solid #e2e8f0', borderRadius:8, fontSize:11, fontFamily:'monospace' }} cursor={{ fill:'rgba(0,0,0,.03)' }}/>
                   <Bar dataKey="v" radius={[2,2,0,0]}>
-                    {WEEKLY_ACTIVITY.map((_,i) => <Cell key={i} fill={i===WEEKLY_ACTIVITY.length-1?'#00d4ff':'#1e2d3d'}/>)}
+                    {WEEKLY_ACTIVITY.map((_,i) => <Cell key={i} fill={i===WEEKLY_ACTIVITY.length-1?'#2563eb':'#e2e8f0'}/>)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

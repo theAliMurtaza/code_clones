@@ -18,7 +18,6 @@ function ClonePairCard({ pair, index, defaultOpen }) {
   const langA  = pair.file_a?.endsWith('.py') ? 'Python' : pair.file_a?.endsWith('.java') ? 'Java' : ''
   const langB  = pair.file_b?.endsWith('.py') ? 'Python' : pair.file_b?.endsWith('.java') ? 'Java' : ''
 
-  // Build line arrays — prefer API-provided code_lines, fallback to raw code
   const linesA = pair.code_lines_a?.length
     ? pair.code_lines_a
     : buildLines(pair.code_a, pair.lines_a?.[0] ?? 1)
@@ -45,7 +44,7 @@ function ClonePairCard({ pair, index, defaultOpen }) {
         </div>
         {pair.cross_language && <Badge type="blue">Cross-lang</Badge>}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-16 h-1.5 bg-b2 rounded-full overflow-hidden">
+          <div className="w-16 h-1.5 bg-s3 rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width: pct + '%', background: meta.color }}/>
           </div>
           <span className="text-xs font-bold font-mono w-9 text-right" style={{ color: meta.color }}>{pct}%</span>
@@ -61,7 +60,7 @@ function ClonePairCard({ pair, index, defaultOpen }) {
       {open && (
         <div className="border-t border-b1">
           {/* Type banner */}
-          <div className="flex items-center gap-2 px-5 py-2 bg-s3 border-b border-b1">
+          <div className="flex items-center gap-2 px-5 py-2 bg-s2 border-b border-b1">
             <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: meta.color }}/>
             <span className="text-[10px] font-mono">
               <strong style={{ color: meta.color }}>{pair.clone_type} · {meta.label}: </strong>
@@ -79,7 +78,7 @@ function ClonePairCard({ pair, index, defaultOpen }) {
           </div>
 
           {/* Footer */}
-          <div className="flex gap-5 px-5 py-2 bg-s3 border-t border-b1 text-[10px] font-mono text-t3">
+          <div className="flex gap-5 px-5 py-2 bg-s2 border-t border-b1 text-[10px] font-mono text-t3">
             <span>Clone lines: <strong className="text-t2">{pair.clone_lines_a?.length ?? 0} (A) · {pair.clone_lines_b?.length ?? 0} (B)</strong></span>
             <span>Similarity: <strong style={{ color: meta.color }}>{pct}%</strong></span>
             <span>Token sim: <strong className="text-t2">{pair.token_sim != null ? Math.round(pair.token_sim * 100) + '%' : '—'}</strong></span>
@@ -131,20 +130,20 @@ export default function Results() {
       {/* Metrics */}
       <div className="grid grid-cols-2 gap-4">
         <div className="card p-5 flex items-center justify-around">
-          <MetricRing value={jobResults.type1_count > 0 || jobResults.total_pairs > 0 ? 0.89 : 0} label="Precision" color="#10b981"/>
-          <MetricRing value={jobResults.type1_count > 0 || jobResults.total_pairs > 0 ? 0.93 : 0} label="Recall"    color="#00d4ff"/>
-          <MetricRing value={jobResults.type1_count > 0 || jobResults.total_pairs > 0 ? 0.91 : 0} label="F1-Score"  color="#f59e0b"/>
+          <MetricRing value={jobResults.type1_count > 0 || jobResults.total_pairs > 0 ? 0.89 : 0} label="Precision" color="#059669"/>
+          <MetricRing value={jobResults.type1_count > 0 || jobResults.total_pairs > 0 ? 0.93 : 0} label="Recall"    color="#2563eb"/>
+          <MetricRing value={jobResults.type1_count > 0 || jobResults.total_pairs > 0 ? 0.91 : 0} label="F1-Score"  color="#d97706"/>
         </div>
         <div className="card p-5">
           <div className="card-title mb-4">Analysis Summary</div>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Fragments Analysed', val: jobResults.total_fragments, color: '#00d4ff' },
-              { label: 'Clone Pairs Found',  val: jobResults.total_pairs,     color: '#8b5cf6' },
-              { label: 'Runtime',            val: jobResults.runtime_seconds ? jobResults.runtime_seconds + 's' : '—', color: '#f59e0b' },
-              { label: 'Threshold Used',     val: Math.round((jobResults.threshold || 0.75) * 100) + '%', color: '#10b981' },
+              { label: 'Fragments Analysed', val: jobResults.total_fragments, color: '#2563eb' },
+              { label: 'Clone Pairs Found',  val: jobResults.total_pairs,     color: '#7c3aed' },
+              { label: 'Runtime',            val: jobResults.runtime_seconds ? jobResults.runtime_seconds + 's' : '—', color: '#d97706' },
+              { label: 'Threshold Used',     val: Math.round((jobResults.threshold || 0.75) * 100) + '%', color: '#059669' },
             ].map(s => (
-              <div key={s.label} className="p-3 bg-s3 rounded-xl border border-b1 text-center">
+              <div key={s.label} className="p-3 bg-s2 rounded-xl border border-b1 text-center">
                 <div className="text-xl font-bold font-mono" style={{ color: s.color }}>{s.val}</div>
                 <div className="text-[10px] text-t3 font-mono mt-0.5">{s.label}</div>
               </div>
@@ -159,11 +158,11 @@ export default function Results() {
           {TYPE_FILTERS.map(t => {
             const cnt = t === 'All' ? pairs.length : counts[t]
             const active = filter === t
-            const colors = { All:'#00d4ff','Type-1':'#10b981','Type-2':'#00d4ff','Type-3':'#f59e0b','Type-4':'#8b5cf6' }
+            const colors = { All:'#2563eb','Type-1':'#059669','Type-2':'#2563eb','Type-3':'#d97706','Type-4':'#7c3aed' }
             return (
               <button key={t} onClick={() => setFilter(t)}
                 className={'px-3 py-1.5 rounded-lg text-xs font-semibold font-mono border transition-all ' +
-                  (active ? 'text-bg' : 'border-b1 text-t3 hover:text-t2 hover:border-b2')}
+                  (active ? 'text-white' : 'border-b1 text-t3 hover:text-t2 hover:border-b2')}
                 style={active ? { background: colors[t], borderColor: colors[t] } : {}}>
                 {t} <span className="opacity-60">({cnt})</span>
               </button>

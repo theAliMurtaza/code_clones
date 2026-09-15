@@ -28,27 +28,27 @@ export default function Sidebar() {
   const { page, setPage, userName, logout } = useApp()
 
   return (
-    <aside className="w-56 min-w-[224px] bg-surface border-r border-b1 flex flex-col overflow-hidden">
+    <aside className="w-64 min-w-[256px] bg-surface border-r border-b1 flex flex-col overflow-hidden">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-b1 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center flex-shrink-0 shadow-lg shadow-accent/25">
+      <div className="px-5 py-6 border-b border-b1 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center flex-shrink-0 shadow-md shadow-accent/20">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="#07090d" strokeWidth="2.5" strokeLinecap="round">
+            stroke="white" strokeWidth="2.5" strokeLinecap="round">
             <polyline points="16 18 22 12 16 6" />
             <polyline points="8 6 2 12 8 18" />
           </svg>
         </div>
         <div>
-          <div className="text-sm font-bold text-t1 tracking-tight">CloneScope</div>
-          <div className="text-[9px] font-mono text-t3 tracking-wide mt-0.5">GraphCodeBERT</div>
+          <div className="text-[15px] font-bold text-t1 tracking-tight">CloneScope</div>
+          <div className="text-[9px] font-mono text-t3 tracking-[.14em] uppercase mt-0.5">Code intelligence</div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-2 py-3 overflow-y-auto space-y-5">
+      <nav className="flex-1 px-3 py-5 overflow-y-auto space-y-6">
         {NAV.map(sec => (
           <div key={sec.section}>
-            <div className="text-[9px] font-bold tracking-[.15em] uppercase text-t3 px-3 mb-2 font-mono">
+              <div className="text-[9px] font-bold tracking-[.15em] uppercase text-t3 px-2.5 mb-2.5 font-mono">
               {sec.section}
             </div>
             {sec.items.map(item => {
@@ -57,7 +57,7 @@ export default function Sidebar() {
                 <button key={item.id} onClick={() => setPage(item.id)}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg mb-0.5
                     text-left text-xs font-medium transition-all relative
-                    ${active ? 'bg-accent/10 text-accent' : 'text-t2 hover:bg-s3 hover:text-t1'}`}>
+                    ${active ? 'bg-accent/10 text-accent shadow-[inset_0_0_0_1px_rgba(37,99,235,.08)]' : 'text-t2 hover:bg-s2 hover:text-t1'}`}>
                   {active && (
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-accent rounded-r" />
                   )}
@@ -75,10 +75,10 @@ export default function Sidebar() {
       </nav>
 
       {/* User footer */}
-      <div className="px-3 pb-3 border-t border-b1 pt-3">
+      <div className="px-3 pb-4 border-t border-b1 pt-3">
         <div className="flex items-center gap-2.5 p-2.5 bg-s2 rounded-lg border border-b1">
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent to-violet
-            flex items-center justify-center text-[10px] font-bold text-bg flex-shrink-0">
+            flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
             {userName ? userName[0].toUpperCase() : 'U'}
           </div>
           <div className="flex-1 min-w-0">

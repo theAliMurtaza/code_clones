@@ -195,7 +195,7 @@ def _pair_to_schema(pair: models.ClonePair) -> schemas.ClonePairSchema:
 async def detect(
     background_tasks: BackgroundTasks,
     files:     list[UploadFile] = File(...),
-    threshold: float            = Form(0.75),
+    threshold: float            = Form(default=settings.DEFAULT_THRESHOLD),
     db:        Session          = Depends(get_db),
     current_user: models.User   = Depends(get_current_user),
 ):
@@ -217,7 +217,7 @@ async def detect(
         id        = uuid.uuid4(),
         user_id   = current_user.id,
         status    = models.JobStatus.QUEUED,
-        threshold = max(0.5, min(0.99, threshold)),
+        threshold = max(0.3, min(0.99, threshold)),
     )
     db.add(job)
 

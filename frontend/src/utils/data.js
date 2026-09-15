@@ -1,10 +1,10 @@
 export const SUPPORTED_EXTS = ['.py', '.java']
 
 export const CLONE_TYPE_META = {
-  'Type-1': { label: 'Exact Clone',    color: '#10b981', desc: 'Identical code — only whitespace or comments differ' },
-  'Type-2': { label: 'Renamed Clone',  color: '#00d4ff', desc: 'Same structure, identifiers or literals renamed' },
-  'Type-3': { label: 'Near-miss Clone',color: '#f59e0b', desc: 'Similar structure with statements added, removed, or modified' },
-  'Type-4': { label: 'Semantic Clone', color: '#8b5cf6', desc: 'Different implementation, functionally equivalent' },
+  'Type-1': { label: 'Exact Clone',    color: '#059669', desc: 'Identical code — only whitespace or comments differ' },
+  'Type-2': { label: 'Renamed Clone',  color: '#2563eb', desc: 'Same structure, identifiers or literals renamed' },
+  'Type-3': { label: 'Near-miss Clone',color: '#d97706', desc: 'Similar structure with statements added, removed, or modified' },
+  'Type-4': { label: 'Semantic Clone', color: '#7c3aed', desc: 'Different implementation, functionally equivalent' },
 }
 
 export const BADGE_CLASS = {

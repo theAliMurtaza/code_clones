@@ -43,19 +43,19 @@ export default function Login() {
     <div className="min-h-screen bg-bg flex items-center justify-center p-4">
       <div className="w-full max-w-[380px]">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center mx-auto mb-4 shadow-xl shadow-accent/25">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#07090d" strokeWidth="2.5" strokeLinecap="round">
+          <div className="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center mx-auto mb-4 shadow-lg shadow-accent/20">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
               <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-t1 tracking-tight">CloneScope</h1>
           <p className="text-xs text-t3 font-mono mt-1">GraphCodeBERT · Code Clone Detection</p>
         </div>
-        <div className="card p-8 shadow-2xl">
-          <div className="flex gap-1 mb-6 p-1 bg-s3 rounded-xl">
+        <div className="card p-8 shadow-lg">
+          <div className="flex gap-1 mb-6 p-1 bg-s2 rounded-xl">
             {['login','register'].map(m => (
               <button key={m} onClick={() => { setMode(m); setError('') }}
-                className={'flex-1 py-2 text-xs font-semibold rounded-lg transition-all ' + (mode===m ? 'bg-surface text-t1 shadow' : 'text-t3 hover:text-t2')}>
+                className={'flex-1 py-2 text-xs font-semibold rounded-lg transition-all ' + (mode===m ? 'bg-surface text-t1 shadow-sm' : 'text-t3 hover:text-t2')}>
                 {m === 'login' ? 'Sign In' : 'Create Account'}
               </button>
             ))}
@@ -73,7 +73,7 @@ export default function Login() {
               <input className="inp" type="password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={onKey} placeholder="At least 6 characters"/>
             </div>
           </div>
-          {error && <div className="mt-4 px-4 py-3 border border-rose/25 rounded-lg text-xs text-rose font-mono leading-relaxed" style={{background:'rgba(244,63,94,.06)'}}>{error}</div>}
+          {error && <div className="mt-4 px-4 py-3 border border-rose/20 rounded-lg text-xs text-rose font-mono leading-relaxed" style={{background:'rgba(225,29,72,.05)'}}>{error}</div>}
           <button onClick={submit} disabled={loading} className="btn btn-primary w-full justify-center mt-5 btn-lg">
             {loading && <Spinner size={15}/>}
             {loading ? 'Please wait…' : mode==='login' ? 'Sign In' : 'Create Account'}

@@ -56,7 +56,7 @@ export function MetricRing({ value, label, color, size = 80 }) {
     <div className="flex flex-col items-center gap-2">
       <div style={{ width: size, height: size, position: 'relative' }}>
         <svg width={size} height={size} viewBox="0 0 80 80" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="40" cy="40" r={r} fill="none" stroke="#1a2332" strokeWidth="7" />
+          <circle cx="40" cy="40" r={r} fill="none" stroke="#e2e8f0" strokeWidth="7" />
           <circle cx="40" cy="40" r={r} fill="none" stroke={color} strokeWidth="7"
             strokeDasharray={c} strokeDashoffset={c - value * c} strokeLinecap="round"
             style={{ transition: 'stroke-dashoffset 1s ease' }} />
@@ -69,9 +69,9 @@ export function MetricRing({ value, label, color, size = 80 }) {
   )
 }
 
-export function ProgressBar({ pct, color = '#00d4ff', animated = false }) {
+export function ProgressBar({ pct, color = '#2563eb', animated = false }) {
   return (
-    <div className="w-full h-1.5 bg-b2 rounded-full overflow-hidden">
+    <div className="w-full h-1.5 bg-s3 rounded-full overflow-hidden">
       <div className={`h-full rounded-full transition-all duration-500 ${animated ? 'animate-pulse2' : ''}`}
         style={{ width: `${pct}%`, background: color }} />
     </div>
@@ -97,7 +97,7 @@ export function Toggle({ label, checked, onChange }) {
         <input type="checkbox" className="absolute opacity-0 w-0 h-0"
           checked={checked} onChange={e => onChange(e.target.checked)} />
         <div className={`absolute inset-0 rounded-full border transition-all duration-200
-          ${checked ? 'bg-accent/80 border-accent/60' : 'bg-s3 border-b2'}`} />
+          ${checked ? 'bg-accent border-accent' : 'bg-s3 border-b2'}`} />
         <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200
           ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </label>
@@ -108,7 +108,7 @@ export function Toggle({ label, checked, onChange }) {
 export function EmptyState({ icon, title, sub, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-s3 border border-b1 flex items-center justify-center mb-4 text-t3">
+      <div className="w-14 h-14 rounded-2xl bg-s2 border border-b1 flex items-center justify-center mb-4 text-t3">
         {icon}
       </div>
       <div className="text-sm font-semibold text-t2 mb-1">{title}</div>

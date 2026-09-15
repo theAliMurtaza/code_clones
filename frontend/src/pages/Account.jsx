@@ -108,13 +108,13 @@ export default function Account() {
                     <td className="px-5 py-3">
                       <div className="flex gap-1.5 flex-wrap">
                         {[
-                          { t: 'T1', n: j.type1_count, c: '#10b981' },
-                          { t: 'T2', n: j.type2_count, c: '#00d4ff' },
-                          { t: 'T3', n: j.type3_count, c: '#f59e0b' },
-                          { t: 'T4', n: j.type4_count, c: '#8b5cf6' },
+                          { t: 'T1', n: j.type1_count, c: '#059669' },
+                          { t: 'T2', n: j.type2_count, c: '#2563eb' },
+                          { t: 'T3', n: j.type3_count, c: '#d97706' },
+                          { t: 'T4', n: j.type4_count, c: '#7c3aed' },
                         ].filter(x => x.n > 0).map(x => (
                           <span key={x.t} className="text-[9px] font-mono px-1.5 py-0.5 rounded"
-                            style={{ background: x.c + '20', color: x.c, border: '1px solid ' + x.c + '40' }}>
+                            style={{ background: x.c + '15', color: x.c, border: '1px solid ' + x.c + '30' }}>
                             {x.t}:{x.n}
                           </span>
                         ))}
@@ -166,7 +166,7 @@ export default function Account() {
             {/* Avatar */}
             <div className="flex flex-col items-center mb-6">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-violet
-                flex items-center justify-center text-2xl font-bold text-bg mb-3 shadow-lg shadow-accent/20">
+                flex items-center justify-center text-2xl font-bold text-white mb-3 shadow-lg shadow-accent/15">
                 {userName ? userName[0].toUpperCase() : 'U'}
               </div>
               <div className="text-sm font-semibold text-t1">{userName || 'User'}</div>

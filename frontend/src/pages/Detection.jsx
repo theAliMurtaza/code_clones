@@ -41,13 +41,13 @@ export default function Detection() {
         {/* Icon */}
         <div className="flex justify-center mb-6">
           <div className={'w-16 h-16 rounded-2xl flex items-center justify-center ' +
-            (isDone ? 'bg-success/15 border border-success/30' :
-             isFail ? 'bg-rose/15 border border-rose/30' :
+            (isDone ? 'bg-success/10 border border-success/25' :
+             isFail ? 'bg-rose/10 border border-rose/25' :
              'bg-accent/10 border border-accent/20')}>
             {isDone
-              ? <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              ? <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               : isFail
-              ? <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              ? <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e11d48" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
               : <Spinner size={32} className="text-accent"/>
             }
           </div>
@@ -67,7 +67,7 @@ export default function Detection() {
 
         {/* Progress bar */}
         <div className="mb-6">
-          <ProgressBar pct={pct} color={isDone ? '#10b981' : isFail ? '#f43f5e' : '#00d4ff'} animated={!isDone && !isFail}/>
+          <ProgressBar pct={pct} color={isDone ? '#059669' : isFail ? '#e11d48' : '#2563eb'} animated={!isDone && !isFail}/>
         </div>
 
         {/* Step indicators */}
@@ -76,15 +76,15 @@ export default function Detection() {
             <div key={s} className="flex items-center flex-1 last:flex-none">
               <div className="flex flex-col items-center">
                 <div className={'w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-bold font-mono transition-all ' +
-                  (i < stepIdx ? 'bg-accent border-accent text-bg' :
-                   i === stepIdx ? 'border-accent text-accent shadow-[0_0_0_3px_rgba(0,212,255,.15)]' :
+                  (i < stepIdx ? 'bg-accent border-accent text-white' :
+                   i === stepIdx ? 'border-accent text-accent shadow-[0_0_0_3px_rgba(37,99,235,.1)]' :
                    'border-b2 text-t3 bg-s2')}>
                   {i < stepIdx ? '✓' : i + 1}
                 </div>
                 <div className={'text-[9px] font-mono mt-1.5 ' + (i <= stepIdx ? 'text-t2' : 'text-t3')}>{s}</div>
               </div>
               {i < STEPS.length - 1 && (
-                <div className={'flex-1 h-0.5 mx-1 mb-4 transition-all ' + (i < stepIdx ? 'bg-accent' : 'bg-b2')}/>
+                <div className={'flex-1 h-0.5 mx-1 mb-4 transition-all ' + (i < stepIdx ? 'bg-accent' : 'bg-s3')}/>
               )}
             </div>
           ))}
@@ -98,7 +98,7 @@ export default function Detection() {
               { label: 'Pairs Found', val: jobProgress.total_pairs ?? '…' },
               { label: 'Runtime', val: jobProgress.runtime_seconds ? jobProgress.runtime_seconds + 's' : '…' },
             ].map(s => (
-              <div key={s.label} className="text-center p-3 bg-s3 rounded-xl border border-b1">
+              <div key={s.label} className="text-center p-3 bg-s2 rounded-xl border border-b1">
                 <div className="text-lg font-bold font-mono text-accent">{s.val}</div>
                 <div className="text-[10px] text-t3 font-mono mt-0.5">{s.label}</div>
               </div>

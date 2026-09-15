@@ -1,22 +1,19 @@
-# Python virtual environments
-.venv/
-venv/
-.venv311/
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
 
-# Python cache
-__pycache__/
-*.py[cod]
+# Python
+backend/.venv/
+backend/venv/
+backend/.venv311/
+backend/__pycache__/
+backend/**/*.py[cod]
 
-# Environment variables
-.env
+# Runtime configuration and local data
+backend/.env
+*.sqlite3
 
-# Node modules
-node_modules/
-
-# Build files
-dist/
-build/
-
-# IDE
-.vscode/
-.idea/
+# Editor and OS files
+.DS_Store
+Thumbs.db
