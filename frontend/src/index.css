@@ -5,7 +5,7 @@
 
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
-  html, body, #root { height: 100%; overflow: hidden; }
+  html, body, #root { min-height: 100%; }
   body {
     background: #f6f8fc;
     color: #162033;
@@ -57,8 +57,4 @@
 
   /* Info box */
   .info-box { @apply flex gap-2.5 p-3.5 bg-accent/5 border border-accent/10 rounded-lg text-xs text-t2 font-mono leading-relaxed; }
-}
-
-@media (max-width: 1023px) {
-  html, body, #root { overflow: auto; }
 }

@@ -17,11 +17,11 @@ function Layout() {
   if (!isAuthed) return <Login />
   const Page = PAGES[page] || Dashboard
   return (
-    <div className="flex min-h-screen overflow-hidden bg-bg">
+    <div className="flex min-h-screen bg-bg">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col min-w-0">
         <TopBar />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"><Page key={page} /></main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8"><Page key={page} /></main>
       </div>
       <Toasts />
     </div>
