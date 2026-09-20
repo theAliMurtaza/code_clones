@@ -134,7 +134,7 @@ export default function Upload() {
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-violet flex-shrink-0"/>
-                GraphCodeBERT semantic analysis
+                Code structure and similarity analysis
               </div>
             </div>
           </div>

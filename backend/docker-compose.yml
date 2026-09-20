@@ -74,7 +74,7 @@ services:
   worker:
     build: .
     restart: unless-stopped
-    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=1
     env_file: .env
     environment:
       DATABASE_URL:         postgresql://clonescope:clonescope@db:5432/clonescope

@@ -32,9 +32,14 @@ class Settings(BaseSettings):
 
     # ── ML model ─────────────────────────────────────────────────────
     CODEBERT_MODEL:   str  = "microsoft/graphcodebert-base"
+    # "auto" selects the low-memory lexical engine on Render and GraphCodeBERT
+    # elsewhere. Set to "full" only on an instance with at least 2 GB RAM.
+    DETECTION_ENGINE: str  = "auto"
     USE_GPU:          bool = False
     MODEL_CACHE_DIR:  str  = "./model_cache"
-    BATCH_SIZE:       int  = 16
+    # GraphCodeBERT attention uses substantial memory on CPU. Keep batches small
+    # unless the deployment has been sized and tested for a larger value.
+    BATCH_SIZE:       int  = 1
     MAX_TOKEN_LENGTH: int  = 512
 
     # ── Detection thresholds ─────────────────────────────────────────
@@ -51,6 +56,7 @@ class Settings(BaseSettings):
 
     # ── File handling ─────────────────────────────────────────────────
     MAX_FILE_SIZE_MB:    int = 10
+    MAX_FRAGMENTS_PER_JOB: int = 80
     SUPPORTED_EXTS:      str = ".py,.java"
     CODE_RETENTION_DAYS: int = 30
 

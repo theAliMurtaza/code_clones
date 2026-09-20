@@ -147,10 +147,6 @@ def run_detection(
     result    = DetectionResult()
     t0        = time.perf_counter()
 
-    if engine is None:
-        from graphcodebert.engine import get_engine
-        engine = get_engine()
-
     # ── Step 1: Fragment extraction ───────────────────────────────────
     all_frags: list[Fragment] = []
     for f in files:
@@ -166,6 +162,16 @@ def run_detection(
     if len(all_frags) < 2:
         result.runtime_seconds = round(time.perf_counter() - t0, 3)
         return result
+
+    if len(all_frags) > settings.MAX_FRAGMENTS_PER_JOB:
+        raise ValueError(
+            f"Analysis is limited to {settings.MAX_FRAGMENTS_PER_JOB} code fragments per job; "
+            f"received {len(all_frags)}. Split the upload into smaller files."
+        )
+
+    if engine is None:
+        from graphcodebert.engine import get_engine
+        engine = get_engine()
 
     # ── Step 2: Embed all fragments ───────────────────────────────────
     codes = [f.code     for f in all_frags]
@@ -207,7 +213,11 @@ def run_detection(
     # Cosine similarity of GraphCodeBERT embeddings is already highly effective.
 
     use_classifier = engine.is_fine_tuned
-    result.mode    = "classifier" if use_classifier else "embedding"
+    result.mode    = (
+        "classifier" if use_classifier
+        else "lightweight" if getattr(engine, "is_lightweight", False)
+        else "embedding"
+    )
 
     if use_classifier:
         logger.info(f"Stage 2 (pairwise classifier): scoring {len(candidates)} pairs...")

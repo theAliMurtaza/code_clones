@@ -46,11 +46,13 @@ export const api = {
 export function pollJob(jobId, token, { onProgress, onDone, onError, intervalMs = 2500 } = {}) {
   let cancelled = false
   let timer
+  let consecutiveErrors = 0
 
   const tick = async () => {
     if (cancelled) return
     try {
       const data = await api.job(jobId, token)
+      consecutiveErrors = 0
       onProgress?.(data)
       if (data.status === 'done') {
         onDone?.(data)
@@ -60,7 +62,13 @@ export function pollJob(jobId, token, { onProgress, onDone, onError, intervalMs 
         timer = setTimeout(tick, intervalMs)
       }
     } catch (err) {
-      onError?.(err)
+      consecutiveErrors++
+      // Allow up to 3 consecutive transient network glitches before declaring error
+      if (consecutiveErrors >= 3) {
+        onError?.(err)
+      } else {
+        timer = setTimeout(tick, intervalMs)
+      }
     }
   }
 

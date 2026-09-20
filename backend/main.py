@@ -19,6 +19,7 @@ Routes:
 from __future__ import annotations
 import uuid
 import logging
+from threading import Lock
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -45,6 +46,7 @@ logging.basicConfig(
 )
 logger   = logging.getLogger(__name__)
 settings = get_settings()
+_detection_lock = Lock()
 
 # ── App init ──────────────────────────────────────────────────────────
 app = FastAPI(
@@ -257,6 +259,13 @@ async def detect(
 
 
 def _run_job_inline(job_id: str, uploaded: list[UploadedFile], threshold: float):
+    """Run one memory-intensive analysis at a time in this web process."""
+    logger.info("Job %s waiting for the analysis worker", job_id)
+    with _detection_lock:
+        _run_job(job_id, uploaded, threshold)
+
+
+def _run_job(job_id: str, uploaded: list[UploadedFile], threshold: float):
     """
     Inline background runner (no Celery). Mirrors the Celery task logic.
     Swap for tasks.run_detection_job.delay(job_id) in production.
@@ -314,6 +323,8 @@ def _run_job_inline(job_id: str, uploaded: list[UploadedFile], threshold: float)
         db.commit()
     finally:
         db.close()
+        import gc
+        gc.collect()
 
 
 def _update_job_status(db: Session, job_id: str, status: models.JobStatus):

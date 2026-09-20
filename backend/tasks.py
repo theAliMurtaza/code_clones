@@ -130,3 +130,5 @@ def run_detection_job(self, job_id: str):
             pass
     finally:
         db.close()
+        import gc
+        gc.collect()

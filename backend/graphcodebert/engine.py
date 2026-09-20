@@ -7,12 +7,15 @@ When True   → detector.py uses pairwise GraphCodeBERT classifier (best accurac
 """
 
 from __future__ import annotations
-import os, sys, logging, hashlib
+import os, sys, logging, hashlib, re
 import numpy as np
 from typing import Optional
 from pathlib import Path
 
+from config import get_settings
+
 logger   = logging.getLogger(__name__)
+settings = get_settings()
 _HERE        = Path(__file__).parent
 _SAVED_MODEL = str(Path(__file__).parent.parent / "saved_models" / "model.bin")
 
@@ -30,6 +33,44 @@ def get_engine() -> "GraphCodeBERTEngine":
     return _engine_instance
 
 
+def _is_low_memory_env() -> bool:
+    """Detect memory-constrained cloud environments (e.g. Render 512MB free tier)."""
+    if (
+        os.getenv("RENDER")
+        or os.getenv("RENDER_SERVICE_ID")
+        or os.getenv("RENDER_INSTANCE_ID")
+        or os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("FLY_APP_NAME")
+    ):
+        return True
+
+    # Check Linux cgroup memory limit (common in Docker/Render/cloud containers)
+    for path in (
+        "/sys/fs/cgroup/memory.max",
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+    ):
+        try:
+            if os.path.isfile(path):
+                with open(path, "r") as f:
+                    val = f.read().strip()
+                    if val != "max" and int(val) < 2 * 1024 * 1024 * 1024:  # < 2 GB
+                        return True
+        except Exception:
+            pass
+
+    # Check system physical RAM
+    try:
+        if hasattr(os, "sysconf"):
+            if "SC_PAGE_SIZE" in os.sysconf_names and "SC_PHYS_PAGES" in os.sysconf_names:
+                total_mem = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+                if total_mem < 2 * 1024 * 1024 * 1024:  # < 2 GB
+                    return True
+    except Exception:
+        pass
+
+    return False
+
+
 class GraphCodeBERTEngine:
     def __init__(self, device: str = "auto", saved_model_path: str = _SAVED_MODEL):
         self._tokenizer        = None
@@ -40,6 +81,7 @@ class GraphCodeBERTEngine:
         self._saved_model_path = saved_model_path
         self._device_pref      = device
         self._model_loaded     = False
+        self._lightweight      = False
         self._load()
 
     # ── Fine-tuned flag ───────────────────────────────────────────────
@@ -52,12 +94,33 @@ class GraphCodeBERTEngine:
         """
         return (
             not self._mock
+            and not self._lightweight
             and self._model_loaded
             and os.path.isfile(self._saved_model_path)
         )
 
+    @property
+    def is_lightweight(self) -> bool:
+        """Whether this instance uses the low-memory structural engine."""
+        return self._lightweight
+
     # ── Loader ────────────────────────────────────────────────────────
     def _load(self):
+        engine_mode = settings.DETECTION_ENGINE.strip().lower()
+        if engine_mode not in {"auto", "full", "lightweight"}:
+            logger.warning(
+                "Unknown DETECTION_ENGINE=%r; using auto mode", settings.DETECTION_ENGINE
+            )
+            engine_mode = "auto"
+
+        # Render's 512 MB instances cannot hold GraphCodeBERT's model weights
+        # and inference workspace. Use lightweight structural engine in auto mode
+        # or when explicitly requested.
+        if engine_mode == "lightweight" or (engine_mode == "auto" and _is_low_memory_env()):
+            self._lightweight = True
+            logger.info("Using lightweight structural clone detection (low-memory mode)")
+            return
+
         try:
             import torch
             from transformers import (
@@ -101,12 +164,12 @@ class GraphCodeBERTEngine:
 
             self._load_parsers()
 
-        except ImportError as exc:
+        except Exception as exc:
             logger.warning(
-                f"PyTorch/transformers not installed ({exc}). "
-                "Mock embeddings active."
+                f"GraphCodeBERT could not load ({exc}). "
+                "Using lightweight structural clone detection."
             )
-            self._mock = True
+            self._lightweight = True
 
     def _load_parsers(self):
         try:
@@ -235,13 +298,14 @@ class GraphCodeBERTEngine:
 
     # ── Public: Stage-1 embeddings ────────────────────────────────────
     def embed_batch(self, codes: list, langs: list) -> np.ndarray:
-        if self._mock:
+        if self._mock or self._lightweight:
             return self._mock_embed(codes)
         import torch
         vectors = []
-        for start in range(0, len(codes), 16):
-            bc = codes[start: start + 16]
-            bl = langs[start: start + 16]
+        batch_size = max(1, min(settings.BATCH_SIZE, 16))
+        for start in range(0, len(codes), batch_size):
+            bc = codes[start: start + batch_size]
+            bl = langs[start: start + batch_size]
             all_ids, all_pos, all_masks = [], [], []
             for code, lang in zip(bc, bl):
                 enc   = self._encode_fragment(code, lang)
@@ -314,12 +378,27 @@ class GraphCodeBERTEngine:
 
     # ── Mock helpers ──────────────────────────────────────────────────
     def _mock_embed(self, codes):
+        """Generate stable structural vectors without loading a ML model."""
         vecs = []
         for c in codes:
-            seed = int(hashlib.md5(c.encode()).hexdigest()[:8], 16)
-            rng  = np.random.default_rng(seed)
-            v    = rng.standard_normal(768).astype(np.float32)
-            v   /= np.linalg.norm(v) + 1e-9
+            tokens = re.findall(r"[A-Za-z_]\w*|\d+|[^\s\w]", c.lower())
+            normalized = [
+                token if token in {"def", "class", "return", "if", "else", "elif", "for", "while", "in", "try", "except", "public", "private", "protected", "static", "new", "import", "from"}
+                else "NUM" if token.isdigit()
+                else "ID" if token[:1].isalpha() or token[:1] == "_"
+                else token
+                for token in tokens
+            ]
+            features = normalized + [
+                f"{normalized[i]}:{normalized[i + 1]}"
+                for i in range(len(normalized) - 1)
+            ]
+            v = np.zeros(768, dtype=np.float32)
+            for feature in features:
+                digest = hashlib.blake2b(feature.encode(), digest_size=5).digest()
+                index = int.from_bytes(digest[:4], "big") % 768
+                v[index] += 1.0 if digest[4] & 1 else -1.0
+            v /= np.linalg.norm(v) + 1e-9
             vecs.append(v)
         return np.stack(vecs)
 

@@ -62,7 +62,7 @@ export default function Detection() {
             ? jobProgress?.total_pairs + ' clone pairs detected in ' + jobProgress?.runtime_seconds + 's'
             : isFail
             ? jobProgress?.error || 'Something went wrong'
-            : 'GraphCodeBERT is analysing your code. This may take a moment.'}
+            : 'The analysis engine is comparing your code. This may take a moment.'}
         </p>
 
         {/* Progress bar */}
