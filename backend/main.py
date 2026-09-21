@@ -73,8 +73,19 @@ def create_tables():
     logger.info("Database tables ready")
 
 
-# ── Health check ──────────────────────────────────────────────────────
-@app.get("/health", tags=["System"])
+# ── Health & Root checks ──────────────────────────────────────────────
+@app.api_route("/", methods=["GET", "HEAD"], tags=["System"])
+def root():
+    return {
+        "status": "ok",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["System"])
 def health():
     return {"status": "ok", "version": settings.APP_VERSION}
 
