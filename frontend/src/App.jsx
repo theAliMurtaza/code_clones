@@ -1,7 +1,8 @@
 import { AppProvider, useApp } from './context/AppContext'
 import Sidebar from './components/Sidebar'
 import { TopBar, Toasts } from './components/TopBar'
-import Login     from './pages/Login'
+import AuthModal from './components/AuthModal'
+import BackendStatusBanner from './components/BackendStatusBanner'
 import Dashboard from './pages/Dashboard'
 import Upload    from './pages/Upload'
 import Detection from './pages/Detection'
@@ -13,17 +14,26 @@ import './index.css'
 const PAGES = { dashboard: Dashboard, upload: Upload, detection: Detection, results: Results, benchmark: Benchmark, account: Account }
 
 function Layout() {
-  const { page, isAuthed } = useApp()
-  if (!isAuthed) return <Login />
+  const { page, authModalOpen, authModalMode, closeAuthModal, authPendingAction } = useApp()
   const Page = PAGES[page] || Dashboard
+
   return (
     <div className="flex min-h-screen bg-bg">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
+        <BackendStatusBanner />
         <TopBar />
         <main className="flex-1 p-4 sm:p-6 lg:p-8"><Page key={page} /></main>
       </div>
       <Toasts />
+      <AuthModal
+        isOpen={authModalOpen}
+        initialMode={authModalMode}
+        onClose={closeAuthModal}
+        onSuccess={() => {
+          if (authPendingAction) authPendingAction()
+        }}
+      />
     </div>
   )
 }

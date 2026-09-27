@@ -5,10 +5,33 @@ import { Badge, Spinner, EmptyState } from '../components/UI'
 import { STATUS_BADGE } from '../utils/data'
 
 export default function Account() {
-  const { userName, getToken, logout, setPage, setJobResults, setCurrentJobId, toast, recentJobs, loadingDash, refreshDashboard } = useApp()
+  const { userName, getToken, logout, setPage, setJobResults, setCurrentJobId, toast, recentJobs, loadingDash, refreshDashboard, isAuthed, openAuthModal } = useApp()
   const [deleting, setDeleting] = useState(null)
 
-  useEffect(() => { refreshDashboard() }, [])
+  useEffect(() => { 
+    if (isAuthed) refreshDashboard() 
+  }, [isAuthed])
+
+  if (!isAuthed) {
+    return (
+      <div className="animate-fadeUp max-w-lg mx-auto mt-12 card p-8 text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center mx-auto text-accent">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+        <h2 className="text-lg font-bold text-t1">Sign In to View Your Projects</h2>
+        <p className="text-xs text-t3 font-mono leading-relaxed">
+          Your saved clone detection analyses, history, and uploaded files are securely tied to your personal account.
+        </p>
+        <div className="pt-2">
+          <button onClick={() => openAuthModal('login')} className="btn btn-primary btn-lg">
+            Sign In / Create Account
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const openJob = async (jobId) => {
     const token = getToken()

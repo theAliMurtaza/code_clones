@@ -10,7 +10,7 @@ const TITLES = {
 }
 
 export function TopBar() {
-  const { page, setPage } = useApp()
+  const { page, setPage, isAuthed, openAuthModal, backendStatus } = useApp()
   return (
     <div className="h-[72px] min-h-[72px] bg-surface/95 backdrop-blur border-b border-b1 flex items-center px-4 sm:px-6 lg:px-8 gap-4">
       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -22,7 +22,27 @@ export function TopBar() {
         <span className="text-sm font-semibold text-t1 truncate">
           {TITLES[page] || page}
         </span>
+
+        {/* Backend health pulse pill */}
+        <div className="hidden sm:flex items-center gap-1.5 ml-3 px-2 py-0.5 rounded-full bg-s2 border border-b1 text-[10px] font-mono text-t3">
+          <span className={`w-1.5 h-1.5 rounded-full ${
+            backendStatus === 'connected' ? 'bg-success animate-pulse2' :
+            backendStatus === 'waking' ? 'bg-amber animate-pulse' :
+            'bg-rose'
+          }`} />
+          <span>{backendStatus === 'connected' ? 'API Online' : backendStatus === 'waking' ? 'Waking API…' : 'API Offline'}</span>
+        </div>
       </div>
+
+      {!isAuthed && (
+        <button 
+          onClick={() => openAuthModal('login')} 
+          className="btn btn-ghost btn-sm whitespace-nowrap text-accent hover:border-accent"
+        >
+          Sign In
+        </button>
+      )}
+
       <button onClick={() => setPage('upload')} className="btn btn-primary btn-sm whitespace-nowrap">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">

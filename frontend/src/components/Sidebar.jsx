@@ -25,7 +25,7 @@ const NAV = [
 ]
 
 export default function Sidebar() {
-  const { page, setPage, userName, logout } = useApp()
+  const { page, setPage, userName, logout, isAuthed, openAuthModal } = useApp()
 
   return (
     <aside className="w-64 min-w-[256px] bg-surface border-r border-b1 flex flex-col overflow-hidden">
@@ -76,23 +76,35 @@ export default function Sidebar() {
 
       {/* User footer */}
       <div className="px-3 pb-4 border-t border-b1 pt-3">
-        <div className="flex items-center gap-2.5 p-2.5 bg-s2 rounded-lg border border-b1">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent to-violet
-            flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
-            {userName ? userName[0].toUpperCase() : 'U'}
+        {isAuthed ? (
+          <div className="flex items-center gap-2.5 p-2.5 bg-s2 rounded-lg border border-b1">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent to-violet
+              flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
+              {userName ? userName[0].toUpperCase() : 'U'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-t1 truncate">{userName || 'User'}</div>
+              <div className="text-[9px] text-t3 font-mono">researcher</div>
+            </div>
+            <button onClick={logout} title="Sign out"
+              className="text-t3 hover:text-rose transition-colors p-0.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+              </svg>
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-t1 truncate">{userName || 'User'}</div>
-            <div className="text-[9px] text-t3 font-mono">researcher</div>
+        ) : (
+          <div className="p-2.5 bg-s2 rounded-lg border border-b1 text-center space-y-2">
+            <div className="text-[11px] text-t3 font-mono">You are in guest view</div>
+            <button
+              onClick={() => openAuthModal('login')}
+              className="btn btn-primary btn-sm w-full justify-center text-xs"
+            >
+              Sign In / Register
+            </button>
           </div>
-          <button onClick={logout} title="Sign out"
-            className="text-t3 hover:text-rose transition-colors p-0.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-            </svg>
-          </button>
-        </div>
+        )}
       </div>
     </aside>
   )

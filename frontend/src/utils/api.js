@@ -1,4 +1,5 @@
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+export const BASE_URL = BASE
 
 async function req(path, options = {}, token = null) {
   const headers = {}
@@ -7,19 +8,33 @@ async function req(path, options = {}, token = null) {
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: { ...headers, ...options.headers },
-  })
+  const { timeout = 60000, ...fetchOptions } = options
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeout)
 
-  if (res.status === 204) return null
-  const data = await res.json().catch(() => ({ detail: res.statusText }))
-  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`)
-  return data
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      ...fetchOptions,
+      headers: { ...headers, ...fetchOptions.headers },
+      signal: fetchOptions.signal || controller.signal,
+    })
+
+    if (res.status === 204) return null
+    const data = await res.json().catch(() => ({ detail: res.statusText }))
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`)
+    return data
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Connection timed out. The server might still be starting up.')
+    }
+    throw err
+  } finally {
+    clearTimeout(id)
+  }
 }
 
 export const api = {
-  health: () => req('/health'),
+  health: (options = {}) => req('/health', { timeout: 10000, ...options }),
   register: (name, email, password) =>
     req('/api/auth/register', {
       method: 'POST',

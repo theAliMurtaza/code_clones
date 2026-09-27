@@ -10,6 +10,7 @@ export default function Upload() {
     threshold, setThreshold,
     setCurrentJobId, setJobProgress,
     setPage, toast, getToken,
+    isAuthed, openAuthModal,
   } = useApp()
 
   const addFiles = useCallback((fileList) => {
@@ -24,7 +25,12 @@ export default function Upload() {
     const inv = added.filter(f => !f.valid)
     if (inv.length) toast(inv.length + ' unsupported file(s)', 'Only .py and .java files are supported', 'warn')
     else toast(added.length + ' file(s) added', 'Ready to analyse')
-  }, [setUploadedFiles, toast])
+
+    // If not authed, show modal to prompt sign in
+    if (!isAuthed) {
+      openAuthModal('login')
+    }
+  }, [setUploadedFiles, toast, isAuthed, openAuthModal])
 
   const onDrop = useCallback(e => {
     e.preventDefault()
@@ -33,11 +39,14 @@ export default function Upload() {
 
   const removeFile = i => setUploadedFiles(p => p.filter((_, j) => j !== i))
 
-  const runAnalysis = async () => {
+  const executeDetection = async (authToken) => {
     const valid = uploadedFiles.filter(f => f.valid)
     if (valid.length === 0) { toast('No valid files', 'Add .py or .java files first', 'warn'); return }
-    const token = getToken()
-    if (!token) { toast('Not signed in', 'Please log in again', 'warn'); return }
+    const token = authToken || getToken()
+    if (!token) {
+      openAuthModal('login', () => executeDetection())
+      return
+    }
     try {
       toast('Submitting analysis…', valid.length + ' file(s) queued')
       const rawFiles = valid.map(f => f.raw)
@@ -48,6 +57,17 @@ export default function Upload() {
     } catch (err) {
       toast('Submission failed', err.message, 'error')
     }
+  }
+
+  const runAnalysis = async () => {
+    const valid = uploadedFiles.filter(f => f.valid)
+    if (valid.length === 0) { toast('No valid files', 'Add .py or .java files first', 'warn'); return }
+    if (!isAuthed) {
+      toast('Authentication required', 'Please sign in or create an account to run analysis', 'info')
+      openAuthModal('login', () => executeDetection())
+      return
+    }
+    executeDetection()
   }
 
   return (
