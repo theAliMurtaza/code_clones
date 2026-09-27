@@ -88,11 +88,18 @@ class JobDetail(JobSummary):
 
 
 class JobListItem(BaseModel):
-    id:          UUID
-    status:      str
-    created_at:  datetime
-    total_pairs: int
-    files:       list[str]   # filenames
+    id:              UUID
+    status:          str
+    created_at:      datetime
+    completed_at:    Optional[datetime] = None
+    total_fragments: int = 0
+    total_pairs:     int = 0
+    type1_count:     int = 0
+    type2_count:     int = 0
+    type3_count:     int = 0
+    type4_count:     int = 0
+    runtime_seconds: Optional[float] = None
+    files:           list[str]   # filenames
 
     class Config:
         from_attributes = True

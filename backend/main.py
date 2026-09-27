@@ -370,11 +370,18 @@ def list_jobs(
     result = []
     for job in jobs:
         result.append(schemas.JobListItem(
-            id          = job.id,
-            status      = job.status.value,
-            created_at  = job.created_at,
-            total_pairs = job.total_pairs,
-            files       = [f.filename for f in job.files],
+            id              = job.id,
+            status          = job.status.value,
+            created_at      = job.created_at,
+            completed_at    = job.completed_at,
+            total_fragments = job.total_fragments or 0,
+            total_pairs     = job.total_pairs or 0,
+            type1_count     = job.type1_count or 0,
+            type2_count     = job.type2_count or 0,
+            type3_count     = job.type3_count or 0,
+            type4_count     = job.type4_count or 0,
+            runtime_seconds = job.runtime_seconds,
+            files           = [f.filename for f in job.files],
         ))
     return result
 
