@@ -81,10 +81,16 @@ class JobSummary(BaseModel):
 
 
 class JobDetail(JobSummary):
+    files:       list[str] = []
     clone_pairs: list[ClonePairSchema]
 
     class Config:
         from_attributes = True
+
+
+class FolderDetectRequest(BaseModel):
+    folder_path: str
+    threshold:   float = 0.75
 
 
 class JobListItem(BaseModel):

@@ -41,13 +41,13 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 'l
   const onKey = e => { if (e.key === 'Enter') submit() }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div 
-        className="w-full max-w-[400px] bg-surface rounded-2xl border border-b1 shadow-2xl overflow-hidden animate-scaleUp"
+        className="w-full max-w-[420px] bg-surface rounded-2xl border border-b1 shadow-[0_25px_60px_rgba(0,0,0,.7)] overflow-hidden animate-fadeUp"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-b1/60 flex items-center justify-between">
+        <div className="px-6 pt-6 pb-4 border-b border-b1 bg-s2/40 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center shadow-md shadow-accent/20">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">

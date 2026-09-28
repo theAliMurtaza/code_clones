@@ -8,33 +8,36 @@ export default {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       colors: {
-        bg:      '#f6f8fc',
-        surface: '#ffffff',
-        s2:      '#f3f6fb',
-        s3:      '#e8edf5',
-        b1:      '#e6ebf2',
-        b2:      '#cfd8e6',
-        accent:  '#2563eb',
-        emerald: '#059669',
-        violet:  '#7c3aed',
-        amber:   '#d97706',
-        rose:    '#e11d48',
-        success: '#059669',
-        t1:      '#162033',
-        t2:      '#58677c',
-        t3:      '#8795a9',
+        /* ── Dark Theme Palette ── */
+        bg:      '#0d1117',   /* deep GitHub-style dark */
+        surface: '#161b22',   /* card backgrounds */
+        s2:      '#1c2330',   /* slightly lighter surface */
+        s3:      '#222c3a',   /* hover / subtle fill */
+        b1:      '#2a3448',   /* border default */
+        b2:      '#3a4a60',   /* border hover */
+        accent:  '#3b82f6',   /* vibrant blue */
+        emerald: '#10b981',   /* green */
+        violet:  '#a78bfa',   /* purple */
+        amber:   '#f59e0b',   /* orange/amber */
+        rose:    '#f43f5e',   /* red/rose */
+        success: '#22c55e',   /* success green */
+        t1:      '#e8edf5',   /* primary text — near white */
+        t2:      '#94a9c9',   /* secondary text — slate-blue */
+        t3:      '#5e7494',   /* muted text */
       },
       keyframes: {
         fadeUp:  { from: { opacity: 0, transform: 'translateY(10px)' }, to: { opacity: 1, transform: 'translateY(0)' } },
         slideIn: { from: { transform: 'translateX(110%)', opacity: 0 }, to: { transform: 'translateX(0)', opacity: 1 } },
-        pulse2:  { '0%,100%': { opacity: .5 }, '50%': { opacity: 1 } },
+        pulse2:  { '0%,100%': { opacity: .4 }, '50%': { opacity: 1 } },
         spin:    { to: { transform: 'rotate(360deg)' } },
+        shimmer: { from: { backgroundPosition: '-200% 0' }, to: { backgroundPosition: '200% 0' } },
       },
       animation: {
         fadeUp:  'fadeUp .3s cubic-bezier(.22,1,.36,1) both',
         slideIn: 'slideIn .3s ease both',
-        pulse2:  'pulse2 2s ease infinite',
+        pulse2:  'pulse2 2.2s ease infinite',
         spin:    'spin 1s linear infinite',
+        shimmer: 'shimmer 2s linear infinite',
       },
     },
   },

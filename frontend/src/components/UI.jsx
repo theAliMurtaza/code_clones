@@ -56,7 +56,7 @@ export function MetricRing({ value, label, color, size = 80 }) {
     <div className="flex flex-col items-center gap-2">
       <div style={{ width: size, height: size, position: 'relative' }}>
         <svg width={size} height={size} viewBox="0 0 80 80" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="40" cy="40" r={r} fill="none" stroke="#e2e8f0" strokeWidth="7" />
+          <circle cx="40" cy="40" r={r} fill="none" stroke="#2a3448" strokeWidth="7" />
           <circle cx="40" cy="40" r={r} fill="none" stroke={color} strokeWidth="7"
             strokeDasharray={c} strokeDashoffset={c - value * c} strokeLinecap="round"
             style={{ transition: 'stroke-dashoffset 1s ease' }} />
@@ -108,11 +108,11 @@ export function Toggle({ label, checked, onChange }) {
 export function EmptyState({ icon, title, sub, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-s2 border border-b1 flex items-center justify-center mb-4 text-t3">
+      <div className="w-14 h-14 rounded-2xl bg-s2 border border-b1 flex items-center justify-center mb-4 text-t2">
         {icon}
       </div>
-      <div className="text-sm font-semibold text-t2 mb-1">{title}</div>
-      {sub && <div className="text-xs text-t3 mb-4 max-w-xs">{sub}</div>}
+      <div className="text-sm font-semibold text-t1 mb-1">{title}</div>
+      {sub && <div className="text-xs text-t2 font-mono mb-4 max-w-xs leading-relaxed">{sub}</div>}
       {action}
     </div>
   )

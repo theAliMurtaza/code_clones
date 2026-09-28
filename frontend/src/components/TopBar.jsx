@@ -23,14 +23,16 @@ export function TopBar() {
           {TITLES[page] || page}
         </span>
 
-        {/* Backend health pulse pill */}
-        <div className="hidden sm:flex items-center gap-1.5 ml-3 px-2 py-0.5 rounded-full bg-s2 border border-b1 text-[10px] font-mono text-t3">
-          <span className={`w-1.5 h-1.5 rounded-full ${
-            backendStatus === 'connected' ? 'bg-success animate-pulse2' :
+        {/* Backend health pulse dot */}
+        <div
+          className="flex items-center ml-2.5 cursor-default"
+          title={backendStatus === 'connected' ? 'API Online' : backendStatus === 'waking' ? 'Waking API…' : 'API Offline'}
+        >
+          <span className={`w-2 h-2 rounded-full transition-colors ${
+            backendStatus === 'connected' ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.7)] animate-pulse2' :
             backendStatus === 'waking' ? 'bg-amber animate-pulse' :
             'bg-rose'
           }`} />
-          <span>{backendStatus === 'connected' ? 'API Online' : backendStatus === 'waking' ? 'Waking API…' : 'API Offline'}</span>
         </div>
       </div>
 
@@ -68,11 +70,11 @@ export function Toasts() {
     <div className="fixed bottom-5 right-5 flex flex-col gap-2 z-50">
       {toasts.map(t => (
         <div key={t.id}
-          className={`flex items-start gap-3 px-4 py-3 bg-surface border rounded-xl min-w-[260px] max-w-sm shadow-lg animate-slideIn ${color[t.type] || color.success}`}>
+          className={`flex items-start gap-3 px-4 py-3 bg-s2 border rounded-xl min-w-[260px] max-w-sm shadow-[0_10px_30px_rgba(0,0,0,.5)] animate-slideIn ${color[t.type] || color.success}`}>
           <span className="text-base leading-none mt-0.5 flex-shrink-0">{icon[t.type] || '✓'}</span>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-t1">{t.msg}</div>
-            {t.sub && <div className="text-[10px] text-t3 font-mono mt-0.5">{t.sub}</div>}
+            {t.sub && <div className="text-[10px] text-t2 font-mono mt-0.5">{t.sub}</div>}
           </div>
           <button onClick={() => removeToast(t.id)} className="text-t3 hover:text-t1 text-lg leading-none flex-shrink-0">×</button>
         </div>

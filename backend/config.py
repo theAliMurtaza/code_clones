@@ -56,7 +56,7 @@ class Settings(BaseSettings):
 
     # ── File handling ─────────────────────────────────────────────────
     MAX_FILE_SIZE_MB:    int = 10
-    MAX_FRAGMENTS_PER_JOB: int = 80
+    MAX_FRAGMENTS_PER_JOB: int = 200
     SUPPORTED_EXTS:      str = ".py,.java"
     CODE_RETENTION_DAYS: int = 30
 

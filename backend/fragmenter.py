@@ -199,5 +199,23 @@ def extract_fragments(source: str, filename: str) -> list[Fragment]:
             logger.warning(f"tree-sitter failed for {filename}: {exc} — using regex")
 
     frags = _extract_regex(source, language, filename)
-    logger.debug(f"{filename}: {len(frags)} fragments (regex fallback)")
-    return frags
+    if frags:
+        logger.debug(f"{filename}: {len(frags)} fragments (regex fallback)")
+        return frags
+
+    # Fallback: if file has at least 2 non-empty lines, treat the entire file as a fragment
+    lines = source.splitlines()
+    non_empty = [l for l in lines if l.strip()]
+    if len(non_empty) >= 2:
+        clean_name = filename.replace("\\", "/").rsplit("/", 1)[-1]
+        logger.debug(f"{filename}: 1 fragment (full-file fallback)")
+        return [Fragment(
+            code       = source.strip(),
+            start_line = 1,
+            end_line   = len(lines),
+            file       = filename,
+            language   = language,
+            name       = clean_name,
+        )]
+
+    return []

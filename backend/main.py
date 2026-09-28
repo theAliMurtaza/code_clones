@@ -18,7 +18,10 @@ Routes:
 
 from __future__ import annotations
 import uuid
+import os
+import json
 import logging
+from pathlib import Path
 from threading import Lock
 from datetime import datetime, timezone
 from typing import Optional
@@ -207,23 +210,47 @@ def _pair_to_schema(pair: models.ClonePair) -> schemas.ClonePairSchema:
           tags=["Detection"])
 async def detect(
     background_tasks: BackgroundTasks,
-    files:     list[UploadFile] = File(...),
-    threshold: float            = Form(default=settings.DEFAULT_THRESHOLD),
-    db:        Session          = Depends(get_db),
-    current_user: models.User   = Depends(get_current_user),
+    files:      list[UploadFile]        = File(...),
+    threshold:  float                   = Form(default=settings.DEFAULT_THRESHOLD),
+    file_paths: Optional[list[str]]     = Form(default=None),
+    paths_json: Optional[str]           = Form(default=None),
+    db:         Session                 = Depends(get_db),
+    current_user: models.User           = Depends(get_current_user),
 ):
     """
-    FR-01-01 + FR-05-02: Upload files and start async detection.
-    Returns job_id immediately; poll GET /api/jobs/{job_id} for results.
+    FR-01-01 + FR-05-02: Upload files or folder of files and start async detection.
+    Extracts coding files (.py, .java), preserving directory paths.
     """
-    # Validate all files before doing any work (FR-01-02)
-    for f in files:
-        _validate_file(f)
-        if f.size and f.size > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
-            raise HTTPException(
-                status_code=413,
-                detail=f"{f.filename} exceeds {settings.MAX_FILE_SIZE_MB} MB limit"
-            )
+    parsed_paths: list[str] = []
+    if paths_json:
+        try:
+            parsed_paths = json.loads(paths_json)
+        except Exception:
+            parsed_paths = []
+    elif file_paths:
+        parsed_paths = file_paths
+
+    valid_files_data: list[tuple[str, str, str]] = []
+    for idx, f in enumerate(files):
+        # Extract relative path if available
+        raw_name = (parsed_paths[idx] if idx < len(parsed_paths) and parsed_paths[idx] else f.filename) or f.filename
+        norm_path = raw_name.replace("\\", "/").lstrip("/")
+        ext = "." + norm_path.rsplit(".", 1)[-1].lower() if "." in norm_path else ""
+        if ext in settings.supported_extensions:
+            if f.size and f.size > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"{norm_path} exceeds {settings.MAX_FILE_SIZE_MB} MB limit"
+                )
+            content = (await f.read()).decode("utf-8", errors="replace")
+            lang = {"py": "python", "java": "java"}.get(ext.lstrip("."), "unknown")
+            valid_files_data.append((norm_path, content, lang))
+
+    if not valid_files_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No coding files ({', '.join(settings.supported_extensions)}) found. Please upload or select a folder containing code files."
+        )
 
     # ── Create Job record ─────────────────────────────────────────────
     job = models.Job(
@@ -234,38 +261,100 @@ async def detect(
     )
     db.add(job)
 
-    # ── Read and store source files ───────────────────────────────────
+    # ── Store source files ────────────────────────────────────────────
     uploaded: list[UploadedFile] = []
-    for f in files:
-        content = (await f.read()).decode("utf-8", errors="replace")
-        ext     = f.filename.rsplit(".", 1)[-1].lower()
-        lang    = {"py": "python", "java": "java"}.get(ext, "unknown")
+    for norm_path, content, lang in valid_files_data:
         db.add(models.SourceFile(
             id       = uuid.uuid4(),
             job_id   = job.id,
-            filename = f.filename,
+            filename = norm_path,
             language = lang,
             content  = content,
             size_kb  = round(len(content.encode()) / 1024, 2),
         ))
-        uploaded.append(UploadedFile(filename=f.filename, content=content))
+        uploaded.append(UploadedFile(filename=norm_path, content=content))
 
     db.commit()
-
-    # ── Run detection as background task ──────────────────────────────
-    # For small jobs: run inline in BackgroundTasks (no Celery needed)
-    # For large jobs: dispatch to Celery worker
-    # We use BackgroundTasks here so the server works without Celery.
-    # To use Celery: replace background_tasks.add_task(...) with:
-    #   from tasks import run_detection_job
-    #   run_detection_job.delay(str(job.id))
 
     background_tasks.add_task(_run_job_inline, str(job.id), uploaded, job.threshold)
 
     return schemas.SubmitResponse(
         job_id  = job.id,
         status  = "queued",
-        message = f"{len(files)} file(s) accepted. Poll /api/jobs/{job.id} for results.",
+        message = f"Extracted and queued {len(uploaded)} coding file(s). Poll /api/jobs/{job.id} for results.",
+    )
+
+
+@app.post("/api/detect/folder",
+          response_model=schemas.SubmitResponse,
+          status_code=status.HTTP_202_ACCEPTED,
+          tags=["Detection"])
+def detect_folder(
+    background_tasks: BackgroundTasks,
+    payload: schemas.FolderDetectRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Extract coding files from a local directory path and run clone detection.
+    """
+    target_dir = Path(payload.folder_path.strip().strip('"').strip("'"))
+    if not target_dir.exists() or not target_dir.is_dir():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Folder not found or is not a directory: '{payload.folder_path}'"
+        )
+
+    ignored_dirs = {".git", ".svn", ".hg", "node_modules", "__pycache__", ".venv", "venv", ".idea", ".vscode", "dist", "build"}
+    extracted: list[tuple[str, str, str]] = []
+
+    for root, dirs, filenames in os.walk(target_dir):
+        dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
+        for fn in filenames:
+            ext = "." + fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+            if ext in settings.supported_extensions:
+                full_p = Path(root) / fn
+                try:
+                    rel_p = str(full_p.relative_to(target_dir)).replace("\\", "/")
+                    content = full_p.read_text(encoding="utf-8", errors="replace")
+                    lang = {"py": "python", "java": "java"}.get(ext.lstrip("."), "unknown")
+                    extracted.append((rel_p, content, lang))
+                except Exception as exc:
+                    logger.warning(f"Could not read {full_p}: {exc}")
+
+    if not extracted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No coding files ({', '.join(settings.supported_extensions)}) found in '{payload.folder_path}'."
+        )
+
+    job = models.Job(
+        id        = uuid.uuid4(),
+        user_id   = current_user.id,
+        status    = models.JobStatus.QUEUED,
+        threshold = max(0.3, min(0.99, payload.threshold)),
+    )
+    db.add(job)
+
+    uploaded: list[UploadedFile] = []
+    for rel_p, content, lang in extracted:
+        db.add(models.SourceFile(
+            id       = uuid.uuid4(),
+            job_id   = job.id,
+            filename = rel_p,
+            language = lang,
+            content  = content,
+            size_kb  = round(len(content.encode()) / 1024, 2),
+        ))
+        uploaded.append(UploadedFile(filename=rel_p, content=content))
+
+    db.commit()
+    background_tasks.add_task(_run_job_inline, str(job.id), uploaded, job.threshold)
+
+    return schemas.SubmitResponse(
+        job_id  = job.id,
+        status  = "queued",
+        message = f"Extracted {len(extracted)} coding file(s) from folder. Poll /api/jobs/{job.id} for results.",
     )
 
 
@@ -420,6 +509,7 @@ def get_job(
         runtime_seconds = job.runtime_seconds,
         threshold       = job.threshold,
         error           = job.error,
+        files           = [f.filename for f in job.files],
         clone_pairs     = [_pair_to_schema(p) for p in job.clone_pairs],
     )
 

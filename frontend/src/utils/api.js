@@ -46,12 +46,23 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: (token) => req('/api/me', {}, token),
-  detect: async (files, threshold, token) => {
+  detect: async (files, threshold, token, filePaths = []) => {
     const form = new FormData()
-    files.forEach(f => form.append('files', f))
+    files.forEach((f, idx) => {
+      const p = filePaths[idx] || f.webkitRelativePath || f.relativePath || f.name
+      form.append('files', f, p)
+    })
+    if (filePaths.length) {
+      form.append('paths_json', JSON.stringify(filePaths))
+    }
     form.append('threshold', String(threshold))
     return req('/api/detect', { method: 'POST', body: form }, token)
   },
+  detectFolder: (folderPath, threshold, token) =>
+    req('/api/detect/folder', {
+      method: 'POST',
+      body: JSON.stringify({ folder_path: folderPath, threshold: Number(threshold) }),
+    }, token),
   jobs:      (token)        => req('/api/jobs',            {}, token),
   job:       (id, token)    => req(`/api/jobs/${id}`,      {}, token),
   deleteJob: (id, token)    => req(`/api/jobs/${id}`, { method: 'DELETE' }, token),
