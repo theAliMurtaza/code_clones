@@ -114,6 +114,7 @@ def run_detection_job(self, job_id: str):
             type3_count     = type_counts["Type-3"],
             type4_count     = type_counts["Type-4"],
             runtime_seconds = result.runtime_seconds,
+            analysis_info   = result.analysis_info,
         )
         db.commit()
         logger.info(f"Job {job_id} completed: {len(result.clone_pairs)} pairs")

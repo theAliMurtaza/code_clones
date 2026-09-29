@@ -40,9 +40,24 @@ All eligible fragments are compared across different files. Functions, short
 scripts, and code outside functions are included; long units use overlapping
 80-line blocks. Exact and renamed clones use token comparisons that preserve
 operators and Python block structure. Near-miss matches require at least 75%
-structural/token similarity and the selected threshold. Type-4 semantic matches
-require a fine-tuned classifier; base embeddings alone do not establish equivalent
-behavior. These heuristics are not an accuracy guarantee.
+structural/token similarity and the selected threshold.
+
+Type-4 semantic analysis uses the real GraphCodeBERT model even without fine-tuned
+weights. Every pair other than exact/renamed clones is checked without a lexical
+pre-filter. With the base model, Type-4 **candidates** require cosine similarity
+of at least `max(selected threshold, TYPE4_EMBEDDING_SIM)` (default 0.85). This is
+an uncalibrated heuristic, not a probability or proof of equivalent behavior.
+Fine-tuned weights at `backend/saved_models/model.bin` enable pairwise classifier
+scoring instead, with `TYPE4_SEM_SIM` (default 0.50) as its minimum cutoff.
+Types 1–3 are retained; Type-4 results appear first.
+
+The result page records the model mode, semantic comparisons performed, and
+cutoff used. If only the lightweight structural engine is available, it explicitly
+says Type-4 was **not checked**. Use `DETECTION_ENGINE=full` on a host with enough
+memory (at least 2 GB) and installed PyTorch/Transformers to enable the real model.
+Restart the backend after changing model configuration or adding trained weights.
+Tune thresholds and measure precision/recall on representative labeled Type-4
+positives and hard negatives; these heuristics are not an accuracy guarantee.
 
 Results show both paths, original line numbers, and matching code side by side.
 **View full code** opens the saved source, including for files with no matches.
@@ -57,3 +72,18 @@ Regression tests (from `backend`, with dependencies installed):
 ```powershell
 python -m unittest test_folder_detection -v
 ```
+
+Optional real-model smoke check (requires downloaded model weights):
+
+```powershell
+$env:RUN_MODEL_TESTS='1'
+$env:HF_HUB_OFFLINE='1'
+$env:TRANSFORMERS_OFFLINE='1'
+python -m unittest test_type4_model -v
+```
+
+This checks recursive/iterative factorial and Python/Java quicksort as Type-4
+candidates, preserves a renamed Type-2 match, and rejects an unrelated greeting
+function. It is a small integration fixture, not a representative accuracy benchmark.
+For task-specific fine-tuning and evaluation, see
+[Microsoft's clone-detection workflow](https://github.com/microsoft/CodeBERT/tree/master/GraphCodeBERT/clonedetection).

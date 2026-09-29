@@ -167,7 +167,9 @@ export default function Results() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [fullSource, setFullSource] = useState(null)
 
-  const pairs = jobResults?.clone_pairs || []
+  const pairs = useMemo(() => [...(jobResults?.clone_pairs || [])].sort((a, b) =>
+    Number(b.clone_type === 'Type-4') - Number(a.clone_type === 'Type-4') || b.similarity - a.similarity
+  ), [jobResults])
 
   // Extract all files with clones with their paths & metadata
   const filesWithClones = useMemo(() => {
@@ -260,11 +262,30 @@ export default function Results() {
 
   return (
     <div className="animate-fadeUp space-y-6 max-w-6xl mx-auto">
+      <div className="card p-4 text-xs space-y-2" role="status">
+        <strong className="text-t1">Type-4 semantic analysis</strong>
+        <p className="text-t2">
+          {jobResults.analysis_info?.mode === 'classifier'
+            ? 'Fine-tuned GraphCodeBERT classifier used. Type-4 matches appear first; Types 1–3 are also included.'
+            : jobResults.analysis_info?.mode === 'embedding'
+              ? 'GraphCodeBERT base model used. Type-4 candidates appear first and need review: embedding similarity is not proof of equivalent behavior.'
+              : jobResults.analysis_info?.mode === 'structural'
+                ? 'Type-4 was NOT checked: the semantic model is unavailable or lightweight mode is enabled. These results contain structural Types 1–3 only. Run with the full model to check Type-4.'
+                : jobResults.analysis_info?.mode === 'not_run'
+                  ? 'No eligible cross-file pairs were available for semantic analysis.'
+                  : 'This older analysis has no model status. Rerun it to check Type-4 with the updated detector.'}
+        </p>
+        {jobResults.analysis_info?.semantic_threshold != null && (
+          <p className="font-mono text-t3">
+            Semantic pairs checked: {jobResults.analysis_info.semantic_pairs_checked} · Minimum semantic score: {Math.round(jobResults.analysis_info.semantic_threshold * 100)}%
+          </p>
+        )}
+      </div>
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         <div className="md:col-span-5 card p-5">
           <div className="card-title mb-3">Files analyzed: {jobResults.files?.length || 0}</div>
-          <p className="text-xs text-t3 mb-3">Python and Java files are compared across paths. Type-4 matches require a trained semantic classifier. Similarity scores are estimates, not measured accuracy.</p>
+          <p className="text-xs text-t3 mb-3">Python and Java files are compared across paths. All four clone types are shown below. Similarity scores are estimates, not measured accuracy.</p>
           <div className="max-h-40 overflow-auto space-y-2">
             {(jobResults.files || []).map(file => (
               <button key={file} onClick={() => setFullSource({ file })}

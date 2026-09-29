@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     TYPE3_SEM_SIM:     float = 0.65   # semantic sim for Type-3
     TYPE3_TOK_SIM:     float = 0.30   # token sim lower-bound for Type-3 (near-miss syntactic)
     TYPE4_SEM_SIM:     float = 0.50   # semantic sim for Type-4 (pure semantic clone)
+    TYPE4_EMBEDDING_SIM: float = 0.85  # Uncalibrated candidate cutoff for the base model
 
     # ── File handling ─────────────────────────────────────────────────
     MAX_FILE_SIZE_MB:    int = 10

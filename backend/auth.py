@@ -76,6 +76,14 @@ def get_current_user(
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Token missing sub")
+    try:
+        user_id = UUID(user_id)
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token user ID",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     user = db.query(models.User).filter(
         models.User.id == user_id,
         models.User.is_active == True,

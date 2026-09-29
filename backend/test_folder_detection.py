@@ -7,6 +7,7 @@ import unittest
 import uuid
 from pathlib import Path
 from unittest.mock import patch
+import numpy as np
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -102,6 +103,46 @@ class DetectionTests(unittest.TestCase):
         self.assertEqual(pair.clone_type, 'Type-4')
         self.assertTrue(pair.cross_language)
 
+    def test_base_model_checks_low_overlap_pairs_once_and_keeps_other_types(self):
+        class BaseEngine:
+            is_fine_tuned = False
+            supports_semantics = True
+            calls = 0
+            def embed_batch(self, codes, langs):
+                self.calls += 1
+                return np.array([[1., 0.], [1., 0.], [0.9, 0.43589], [0., 1.]])
+        engine = BaseEngine()
+        files = [UploadedFile('one.py', 'print("hello")'),
+                 UploadedFile('copy.py', 'print("hello")'),
+                 UploadedFile('two.java', 'System.out.println("hello");'),
+                 UploadedFile('other.java', 'for(int i=0; i<10; i++) { total += i; }')]
+        result = run_detection(files, threshold=0.5, engine=engine)
+        self.assertEqual(engine.calls, 1)
+        self.assertEqual(result.mode, 'embedding')
+        self.assertEqual(result.semantic_pairs_checked, 5)
+        self.assertEqual(result.clone_pairs[0].clone_type, 'Type-4')
+        self.assertTrue(any(p.clone_type == 'Type-1' for p in result.clone_pairs))
+        self.assertTrue(all('candidate' in p.description for p in result.clone_pairs if p.clone_type == 'Type-4'))
+        self.assertFalse(any('other.java' in (p.file_a, p.file_b) for p in result.clone_pairs))
+        high = run_detection(files, threshold=0.99, engine=engine)
+        self.assertFalse(any(p.clone_type == 'Type-4' for p in high.clone_pairs))
+
+    def test_lightweight_engine_is_reported_as_semantic_unavailable(self):
+        result = self.detect([('a.py', 'print("hello")'), ('b.java', 'System.out.println("hello");')])
+        self.assertEqual(result.analysis_info['mode'], 'structural')
+        self.assertEqual(result.semantic_pairs_checked, 0)
+        self.assertFalse(result.clone_pairs)
+
+    def test_invalid_embeddings_fail_instead_of_returning_no_clones(self):
+        class BaseEngine:
+            is_fine_tuned = False
+            supports_semantics = True
+            def embed_batch(self, codes, langs):
+                return np.zeros((len(codes), 3))
+        with self.assertRaisesRegex(RuntimeError, 'empty embeddings'):
+            run_detection([UploadedFile('a.py', 'print("hello")'),
+                           UploadedFile('b.java', 'System.out.println("hello");')], engine=BaseEngine())
+
 
 class FolderApiTests(unittest.TestCase):
     def setUp(self):
@@ -143,6 +184,7 @@ class FolderApiTests(unittest.TestCase):
         self.assertEqual(result['status'], 'done', result)
         self.assertEqual(set(result['files']), set(paths))
         self.assertTrue(result['clone_pairs'])
+        self.assertEqual(result['analysis_info']['mode'], 'structural')
         pair = result['clone_pairs'][0]
         self.assertEqual(pair['code_lines_a'][0]['n'], pair['lines_a'][0])
         source_url = f'/api/jobs/{job_id}/source'
@@ -151,6 +193,34 @@ class FolderApiTests(unittest.TestCase):
         self.assertEqual(self.client.get(source_url, params={'path': '../missing.py'}).status_code, 404)
         main.app.dependency_overrides[main.get_current_user] = lambda: models.User(id=uuid.uuid4())
         self.assertEqual(self.client.get(source_url, params={'path': paths[0]}).status_code, 404)
+
+    def test_real_registration_login_and_authenticated_upload(self):
+        # Exercise JWT -> UUID -> database lookup, not the user override.
+        del main.app.dependency_overrides[main.get_current_user]
+        credentials = {'email': 'signin@example.com', 'password': 'local-test-password'}
+        registered = self.client.post('/api/auth/register', json={**credentials, 'name': 'Test'})
+        self.assertEqual(registered.status_code, 201, registered.text)
+        logged_in = self.client.post('/api/auth/login', json=credentials)
+        self.assertEqual(logged_in.status_code, 200, logged_in.text)
+        for token in [registered.json()['access_token'], logged_in.json()['access_token']]:
+            headers = {'Authorization': f'Bearer {token}', 'Origin': 'http://localhost:5173'}
+            for route in ['/api/me', '/api/jobs', '/api/stats']:
+                response = self.client.get(route, headers=headers)
+                self.assertEqual(response.status_code, 200, response.text)
+            response = self.client.post('/api/detect', headers=headers,
+                                        files=[('files', ('a.py', 'x = 1')), ('files', ('b.py', 'x = 1'))])
+            self.assertEqual(response.status_code, 202, response.text)
+            self.assertEqual(response.headers['access-control-allow-origin'], 'http://localhost:5173')
+            result = self.client.get('/api/jobs/' + response.json()['job_id'], headers=headers)
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertEqual(result.json()['status'], 'done')
+
+    def test_malformed_token_subject_returns_401_not_server_error(self):
+        from auth import create_access_token
+        del main.app.dependency_overrides[main.get_current_user]
+        token = create_access_token('invalid-user-id', 'test@example.com')
+        response = self.client.get('/api/me', headers={'Authorization': f'Bearer {token}'})
+        self.assertEqual(response.status_code, 401, response.text)
 
     def test_local_scan_includes_nested_hidden_and_build_directories(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -180,6 +250,17 @@ class FolderApiTests(unittest.TestCase):
         result = self.client.get('/api/jobs/' + response.json()['job_id']).json()
         self.assertEqual(result['status'], 'failed')
         self.assertIn('inference failed', result['error'])
+
+    def test_startup_adds_metadata_column_to_existing_jobs_table(self):
+        from sqlalchemy import inspect, text
+        old_engine = create_engine('sqlite://')
+        with old_engine.begin() as connection:
+            connection.execute(text('CREATE TABLE jobs (id VARCHAR PRIMARY KEY)'))
+        with patch.object(main, 'engine', old_engine):
+            main.create_tables()
+            main.create_tables()  # Restarting must be safe.
+        self.assertIn('analysis_info', {c['name'] for c in inspect(old_engine).get_columns('jobs')})
+        old_engine.dispose()
 
 
 if __name__ == '__main__':

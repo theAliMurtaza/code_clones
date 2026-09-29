@@ -88,6 +88,7 @@ class SourceFileDetail(BaseModel):
 
 class JobDetail(JobSummary):
     files:       list[str] = []
+    analysis_info: Optional[dict] = None
     clone_pairs: list[ClonePairSchema]
 
     class Config:

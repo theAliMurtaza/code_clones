@@ -32,6 +32,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect, text
 
 from config import get_settings
 from database import engine, get_db, Base
@@ -73,6 +74,10 @@ app.add_middleware(
 @app.on_event("startup")
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    # Additive migration for installations created before analysis metadata.
+    if "analysis_info" not in {c["name"] for c in inspect(engine).get_columns("jobs")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE jobs ADD COLUMN analysis_info JSON"))
     logger.info("Database tables ready")
 
 
@@ -426,6 +431,7 @@ def _run_job(job_id: str, uploaded: list[UploadedFile], threshold: float):
             "type3_count":     counts["Type-3"],
             "type4_count":     counts["Type-4"],
             "runtime_seconds": result.runtime_seconds,
+            "analysis_info":   result.analysis_info,
         })
         db.commit()
 
@@ -527,6 +533,7 @@ def get_job(
         threshold       = job.threshold,
         error           = job.error,
         files           = [f.filename for f in job.files],
+        analysis_info   = job.analysis_info,
         clone_pairs     = [_pair_to_schema(p) for p in job.clone_pairs],
     )
 

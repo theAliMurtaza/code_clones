@@ -1,10 +1,4 @@
-"""
-graphcodebert/engine.py  (updated)
-
-Key change: added  is_fine_tuned  property.
-When False  → detector.py uses Stage-1 cosine similarity (works immediately).
-When True   → detector.py uses pairwise GraphCodeBERT classifier (best accuracy).
-"""
+"""GraphCodeBERT embeddings and optional fine-tuned clone classification."""
 
 from __future__ import annotations
 import os, sys, logging, hashlib, re
@@ -81,6 +75,7 @@ class GraphCodeBERTEngine:
         self._saved_model_path = saved_model_path
         self._device_pref      = device
         self._model_loaded     = False
+        self._fine_tuned_loaded = False
         self._lightweight      = False
         self._load()
 
@@ -88,16 +83,19 @@ class GraphCodeBERTEngine:
     @property
     def is_fine_tuned(self) -> bool:
         """
-        True only when a fine-tuned model.bin exists AND the model loaded.
-        When False, detector.py uses embedding cosine similarity instead of
-        the pairwise classifier, which still gives very good results.
+        True only after compatible fine-tuned weights loaded successfully.
         """
         return (
             not self._mock
             and not self._lightweight
             and self._model_loaded
-            and os.path.isfile(self._saved_model_path)
+            and self._fine_tuned_loaded
         )
+
+    @property
+    def supports_semantics(self) -> bool:
+        """Structural/hash fallback vectors must never stand in for the model."""
+        return self._model_loaded and not self._mock and not self._lightweight
 
     @property
     def is_lightweight(self) -> bool:
@@ -150,7 +148,8 @@ class GraphCodeBERTEngine:
 
             if os.path.isfile(self._saved_model_path):
                 state = torch.load(self._saved_model_path, map_location=self._device)
-                self._clf_model.load_state_dict(state, strict=False)
+                self._clf_model.load_state_dict(state, strict=True)
+                self._fine_tuned_loaded = True
                 logger.info(
                     f"Fine-tuned weights loaded from {self._saved_model_path}\n"
                     "   → Pairwise classifier will be used (highest accuracy)"
@@ -158,7 +157,7 @@ class GraphCodeBERTEngine:
             else:
                 logger.info(
                     "No fine-tuned weights found at saved_models/model.bin\n"
-                    "   → Embedding cosine similarity will be used (still effective)\n"
+                    "   → Embedding similarity will produce uncalibrated semantic candidates\n"
                     "   → Run train.py on BigCloneBench to enable pairwise classifier"
                 )
 
@@ -334,16 +333,13 @@ class GraphCodeBERTEngine:
 
     # ── Public: Stage-2 pairwise prediction (only when fine-tuned) ───
     def predict_pair(self, code_a, lang_a, code_b, lang_b) -> float:
-        if self._mock:
-            return self._mock_pair(code_a, code_b)
         return self.predict_batch([(code_a, lang_a, code_b, lang_b)])[0]
 
     def predict_batch(self, pairs: list) -> list:
-        if self._mock:
-            return [self._mock_pair(a, b) for a, _, b, _ in pairs]
+        if not self.supports_semantics:
+            raise RuntimeError("GraphCodeBERT is unavailable; structural fallback cannot score Type-4 clones")
         if not self.is_fine_tuned:
-            # When no fine-tuned classifier is loaded, use embedding cosine similarity
-            # to provide accurate semantic clone predictions instead of calling an untrained head.
+            # Base-model cosine is an uncalibrated candidate score, not P(clone).
             ca_list = [p[0] for p in pairs]
             la_list = [p[1] for p in pairs]
             cb_list = [p[2] for p in pairs]

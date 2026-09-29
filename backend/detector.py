@@ -47,7 +47,14 @@ class DetectionResult:
     stage1_pairs:    int   = 0
     stage2_pairs:    int   = 0
     errors:          list  = field(default_factory=list)
-    mode:            str   = "structural"
+    mode:            str   = "not_run"
+    semantic_pairs_checked: int = 0
+    semantic_threshold: float | None = None
+
+    @property
+    def analysis_info(self):
+        return {"mode": self.mode, "semantic_pairs_checked": self.semantic_pairs_checked,
+                "semantic_threshold": self.semantic_threshold}
 
 
 def run_detection(files: list, threshold: float = None, engine=None) -> DetectionResult:
@@ -82,7 +89,12 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
     if engine is None:
         from graphcodebert.engine import get_engine
         engine = get_engine()
-    result.mode = "classifier" if engine.is_fine_tuned else "structural"
+    semantic_available = engine.is_fine_tuned or getattr(engine, "supports_semantics", False)
+    result.mode = ("classifier" if engine.is_fine_tuned else
+                   "embedding" if semantic_available else "structural")
+    if semantic_available:
+        result.semantic_threshold = max(threshold, settings.TYPE4_SEM_SIM if engine.is_fine_tuned
+                                        else settings.TYPE4_EMBEDDING_SIM)
     parameterized = [parameterize_tokens(f.code, f.language) for f in fragments]
     scored, semantic_candidates = {}, []
     for i, j in candidates:
@@ -99,22 +111,40 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
                 ctype = "Type-3"
         if ctype and score >= threshold:
             scored[(i, j)] = (ctype, score, tok)
-        elif engine.is_fine_tuned:
+        if ctype not in ("Type-1", "Type-2") and semantic_available:
             semantic_candidates.append((i, j))
 
-    # Raw base-model or hashed-vector cosine scores are not clone probabilities.
-    # Only a trained pair classifier can add semantic/cross-language matches.
-    # Score all remaining pairs in bounded batches without a top-k cutoff.
+    # Embed each fragment once. No lexical/cosine pre-filter or top-k cutoff:
+    # semantically equivalent implementations can have very different tokens.
+    similarities = None
+    if semantic_candidates and not engine.is_fine_tuned:
+        vectors = np.asarray(engine.embed_batch([f.code for f in fragments],
+                                               [f.language for f in fragments]))
+        if vectors.ndim != 2 or len(vectors) != len(fragments) or not np.all(np.isfinite(vectors)):
+            raise RuntimeError("The semantic model returned invalid embeddings")
+        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        if np.any(norms <= 1e-9):
+            raise RuntimeError("The semantic model returned empty embeddings")
+        normalized = vectors / norms
+        similarities = np.clip(normalized @ normalized.T, -1.0, 1.0)
+
     for offset in range(0, len(semantic_candidates), 32):
         batch = semantic_candidates[offset:offset + 32]
-        probabilities = engine.predict_batch([
+        probabilities = ([float(similarities[i, j]) for i, j in batch]
+                         if similarities is not None else engine.predict_batch([
             (fragments[i].code, fragments[i].language,
              fragments[j].code, fragments[j].language) for i, j in batch
-        ])
-        if len(probabilities) != len(batch) or not np.all(np.isfinite(probabilities)):
+        ]))
+        if (len(probabilities) != len(batch) or not np.all(np.isfinite(probabilities))
+                or (engine.is_fine_tuned and any(p < 0 or p > 1 for p in probabilities))):
             raise RuntimeError("The semantic classifier returned invalid scores")
+        cutoff = max(threshold, settings.TYPE4_SEM_SIM if engine.is_fine_tuned
+                     else settings.TYPE4_EMBEDDING_SIM)
+        result.semantic_pairs_checked += len(batch)
         for (i, j), prob in zip(batch, probabilities):
-            if prob >= max(threshold, settings.TYPE4_SEM_SIM):
+            # Keep Type-3 for syntactically similar code; Type-4 describes the
+            # remaining semantic matches, including cross-language pairs.
+            if prob >= cutoff and (i, j) not in scored:
                 tok = SequenceMatcher(None, tokens[i], tokens[j], autojunk=False).ratio()
                 scored[(i, j)] = ("Type-4", float(prob), tok)
 
@@ -126,10 +156,14 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
             lines_a=[a.start_line, a.end_line], lines_b=[b.start_line, b.end_line],
             clone_lines_a=a.line_range, clone_lines_b=b.line_range,
             clone_type=ctype, similarity=round(score, 6), token_sim=round(tok, 6),
-            cross_language=cross, description=_clone_description(ctype, cross),
+            cross_language=cross,
+            description=("Type-4 candidate — base-model semantic similarity; review behavior"
+                         if ctype == "Type-4" and result.mode == "embedding"
+                         else _clone_description(ctype, cross)),
             code_a=a.code, code_b=b.code,
         ))
-    result.clone_pairs.sort(key=lambda p: (-p.similarity, p.file_a, p.file_b, p.lines_a, p.lines_b))
+    result.clone_pairs.sort(key=lambda p: (p.clone_type != "Type-4", -p.similarity,
+                                           p.file_a, p.file_b, p.lines_a, p.lines_b))
     result.stage2_pairs = len(result.clone_pairs)
     result.runtime_seconds = round(time.perf_counter() - started, 3)
     return result

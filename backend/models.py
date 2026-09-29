@@ -50,6 +50,7 @@ class Job(Base):
     status       = Column(Enum(JobStatus), default=JobStatus.QUEUED, nullable=False, index=True)
     threshold    = Column(Float, default=0.75)
     error        = Column(Text, nullable=True)
+    analysis_info = Column(JSON, nullable=True)
     created_at   = Column(DateTime(timezone=True), default=utcnow)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
