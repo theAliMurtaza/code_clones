@@ -43,12 +43,12 @@ function ColourLine({ text }) {
   return <>{segments.length ? segments : <span style={{ color: '#c9d8ef' }}>{text}</span>}</>
 }
 
-export default function CodeViewer({ lines = [], cloneLines = [], cloneType = 'Type-4', file = '', lang = '' }) {
+export default function CodeViewer({ lines = [], cloneLines = [], cloneType = 'Type-4', file = '', lang = '', onViewFull }) {
   const cloneSet = new Set(cloneLines)
   const colors   = TYPE_COLORS[cloneType] || TYPE_COLORS['Type-4']
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 min-w-0">
       {/* File header */}
       <div className="flex items-center gap-2 px-3 py-2 bg-s2 border-b border-b1 flex-shrink-0">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -60,6 +60,8 @@ export default function CodeViewer({ lines = [], cloneLines = [], cloneType = 'T
           {file || 'unknown'}
         </span>
         {lang && <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-s3/80 text-t2 uppercase border border-b1">{lang}</span>}
+        {onViewFull && <button type="button" onClick={onViewFull}
+          className="text-[11px] font-mono text-accent whitespace-nowrap hover:underline">View full code</button>}
         {file && (
           <button
             type="button"

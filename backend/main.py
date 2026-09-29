@@ -225,24 +225,35 @@ async def detect(
     if paths_json:
         try:
             parsed_paths = json.loads(paths_json)
-        except Exception:
-            parsed_paths = []
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=422, detail="paths_json must be a JSON array of paths")
     elif file_paths:
         parsed_paths = file_paths
+    if not isinstance(parsed_paths, list) or any(not isinstance(p, str) for p in parsed_paths):
+        raise HTTPException(status_code=422, detail="File paths must be a list of strings")
+    if parsed_paths and len(parsed_paths) != len(files):
+        raise HTTPException(status_code=422, detail="Provide one path for each uploaded file")
 
     valid_files_data: list[tuple[str, str, str]] = []
+    seen_paths = set()
     for idx, f in enumerate(files):
         # Extract relative path if available
         raw_name = (parsed_paths[idx] if idx < len(parsed_paths) and parsed_paths[idx] else f.filename) or f.filename
         norm_path = raw_name.replace("\\", "/").lstrip("/")
         ext = "." + norm_path.rsplit(".", 1)[-1].lower() if "." in norm_path else ""
         if ext in settings.supported_extensions:
+            if norm_path in seen_paths:
+                raise HTTPException(status_code=422, detail=f"Duplicate file path: {norm_path}")
+            seen_paths.add(norm_path)
             if f.size and f.size > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
                 raise HTTPException(
                     status_code=413,
                     detail=f"{norm_path} exceeds {settings.MAX_FILE_SIZE_MB} MB limit"
                 )
-            content = (await f.read()).decode("utf-8", errors="replace")
+            raw = await f.read(settings.MAX_FILE_SIZE_MB * 1024 * 1024 + 1)
+            if len(raw) > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
+                raise HTTPException(status_code=413, detail=f"{norm_path} exceeds the file size limit")
+            content = raw.decode("utf-8", errors="replace")
             lang = {"py": "python", "java": "java"}.get(ext.lstrip("."), "unknown")
             valid_files_data.append((norm_path, content, lang))
 
@@ -305,22 +316,26 @@ def detect_folder(
             detail=f"Folder not found or is not a directory: '{payload.folder_path}'"
         )
 
-    ignored_dirs = {".git", ".svn", ".hg", "node_modules", "__pycache__", ".venv", "venv", ".idea", ".vscode", "dist", "build"}
     extracted: list[tuple[str, str, str]] = []
 
-    for root, dirs, filenames in os.walk(target_dir):
-        dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
-        for fn in filenames:
+    def scan_error(exc):
+        raise HTTPException(status_code=400, detail=f"Could not scan folder: {exc}")
+
+    for root, dirs, filenames in os.walk(target_dir, onerror=scan_error):
+        dirs.sort()
+        for fn in sorted(filenames):
             ext = "." + fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
             if ext in settings.supported_extensions:
                 full_p = Path(root) / fn
                 try:
                     rel_p = str(full_p.relative_to(target_dir)).replace("\\", "/")
+                    if full_p.stat().st_size > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
+                        raise HTTPException(status_code=413, detail=f"{rel_p} exceeds the file size limit")
                     content = full_p.read_text(encoding="utf-8", errors="replace")
                     lang = {"py": "python", "java": "java"}.get(ext.lstrip("."), "unknown")
                     extracted.append((rel_p, content, lang))
-                except Exception as exc:
-                    logger.warning(f"Could not read {full_p}: {exc}")
+                except OSError as exc:
+                    raise HTTPException(status_code=400, detail=f"Could not read {full_p}: {exc}")
 
     if not extracted:
         raise HTTPException(
@@ -370,6 +385,7 @@ def _run_job(job_id: str, uploaded: list[UploadedFile], threshold: float):
     Inline background runner (no Celery). Mirrors the Celery task logic.
     Swap for tasks.run_detection_job.delay(job_id) in production.
     """
+    job_id = uuid.UUID(str(job_id))
     db = SessionLocal()  # new session for background thread
     try:
         _update_job_status(db, job_id, models.JobStatus.RUNNING)
@@ -415,6 +431,7 @@ def _run_job(job_id: str, uploaded: list[UploadedFile], threshold: float):
 
     except Exception as exc:
         logger.exception(f"Inline job {job_id} failed: {exc}")
+        db.rollback()
         db.query(models.Job).filter(models.Job.id == job_id).update({
             "status":       models.JobStatus.FAILED,
             "completed_at": datetime.now(timezone.utc),
@@ -479,7 +496,7 @@ def list_jobs(
          response_model=schemas.JobDetail,
          tags=["Jobs"])
 def get_job(
-    job_id: str,
+    job_id: uuid.UUID,
     db:     Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -514,11 +531,28 @@ def get_job(
     )
 
 
+@app.get("/api/jobs/{job_id}/source", response_model=schemas.SourceFileDetail, tags=["Jobs"])
+def get_source_file(
+    job_id: uuid.UUID,
+    path: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Return the saved upload, scoped to its job and owner (never read disk paths)."""
+    source = (db.query(models.SourceFile).join(models.Job)
+              .filter(models.Job.id == job_id, models.Job.user_id == current_user.id,
+                      models.SourceFile.filename == path).first())
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source file not found")
+    return schemas.SourceFileDetail(filename=source.filename, language=source.language,
+                                    content=source.content)
+
+
 @app.delete("/api/jobs/{job_id}",
             status_code=status.HTTP_204_NO_CONTENT,
             tags=["Jobs"])
 def delete_job(
-    job_id: str,
+    job_id: uuid.UUID,
     db:     Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):

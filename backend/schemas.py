@@ -80,6 +80,12 @@ class JobSummary(BaseModel):
         from_attributes = True
 
 
+class SourceFileDetail(BaseModel):
+    filename: str
+    language: str
+    content: str
+
+
 class JobDetail(JobSummary):
     files:       list[str] = []
     clone_pairs: list[ClonePairSchema]

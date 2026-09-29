@@ -65,6 +65,7 @@ export const api = {
     }, token),
   jobs:      (token)        => req('/api/jobs',            {}, token),
   job:       (id, token)    => req(`/api/jobs/${id}`,      {}, token),
+  source: (id, path, token) => req(`/api/jobs/${id}/source?path=${encodeURIComponent(path)}`, {}, token),
   deleteJob: (id, token)    => req(`/api/jobs/${id}`, { method: 'DELETE' }, token),
   stats: (token) => req('/api/stats', {}, token),
 }

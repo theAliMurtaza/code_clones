@@ -14,9 +14,9 @@ inside the tree-sitter-python / tree-sitter-java pip packages.
 """
 
 from __future__ import annotations
-import re
+import ast
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def _load_tree_sitter() -> bool:
         logger.info("tree-sitter 0.24 loaded (Python + Java grammars ready)")
         return True
     except Exception as exc:
-        logger.warning(f"tree-sitter unavailable ({exc}), using regex fallback")
+        logger.warning(f"tree-sitter unavailable ({exc}), using source blocks")
         return False
 
 
@@ -78,13 +78,6 @@ def _make_parser(lang_obj):
         return p
 
 
-# ── Query strings per language ─────────────────────────────────────────
-_QUERIES = {
-    "python": "(function_definition) @fn (class_definition) @cls",
-    "java":   "(method_declaration)  @fn (class_declaration)  @cls",
-}
-
-
 def _extract_ts(source: str, language: str, filename: str) -> list[Fragment]:
     """Extract fragments using tree-sitter (precise, line-accurate)."""
     lang_obj = _PY_LANG if language == "python" else _JAVA_LANG
@@ -92,27 +85,20 @@ def _extract_ts(source: str, language: str, filename: str) -> list[Fragment]:
     tree     = parser.parse(bytes(source, "utf-8", errors="replace"))
     lines    = source.splitlines()
 
-    query_str = _QUERIES.get(language, "")
-    if not query_str:
-        return []
-
-    query    = lang_obj.query(query_str)
-    captures = query.captures(tree.root_node)
-
-    # tree-sitter 0.24 returns dict[str, list[Node]]
-    nodes = []
-    if isinstance(captures, dict):
-        for node_list in captures.values():
-            nodes.extend(node_list)
-    else:
-        # older format: list of (Node, str)
-        nodes = [n for n, _ in captures]
+    # Walking nodes avoids the incompatible Query APIs in tree-sitter releases.
+    wanted = {"function_definition", "method_declaration", "constructor_declaration"}
+    nodes, pending = [], [tree.root_node]
+    while pending:
+        node = pending.pop()
+        if node.type in wanted:
+            nodes.append(node)
+        pending.extend(reversed(node.children))
 
     # De-duplicate by (start_row, end_row)
     seen, fragments = set(), []
     for node in nodes:
         key = (node.start_point[0], node.end_point[0])
-        if key in seen or node.end_point[0] - node.start_point[0] < 2:
+        if key in seen:
             continue
         seen.add(key)
 
@@ -124,7 +110,7 @@ def _extract_ts(source: str, language: str, filename: str) -> list[Fragment]:
         name = ""
         for child in node.children:
             if child.type in ("identifier", "name"):
-                name = source[child.start_byte : child.end_byte]
+                name = source.encode("utf-8")[child.start_byte : child.end_byte].decode("utf-8")
                 break
 
         fragments.append(Fragment(
@@ -139,40 +125,6 @@ def _extract_ts(source: str, language: str, filename: str) -> list[Fragment]:
     return fragments
 
 
-# ── Regex fallback ────────────────────────────────────────────────────
-_PY_RE   = re.compile(r"^( {0,8})(async\s+)?def\s+(\w+)", re.MULTILINE)
-_JAVA_RE = re.compile(
-    r"^( {0,12})(public|private|protected|static|\s)+"
-    r"[\w<>\[\]]+\s+(\w+)\s*\(",
-    re.MULTILINE,
-)
-
-
-def _extract_regex(source: str, language: str, filename: str) -> list[Fragment]:
-    lines   = source.splitlines()
-    pattern = _PY_RE if language == "python" else _JAVA_RE
-    matches = list(pattern.finditer(source))
-    frags   = []
-    for i, m in enumerate(matches):
-        start = source[:m.start()].count("\n")
-        end   = (
-            source[:matches[i + 1].start()].count("\n") - 1
-            if i + 1 < len(matches)
-            else len(lines) - 1
-        )
-        if end - start < 2:
-            continue
-        frags.append(Fragment(
-            code       = "\n".join(lines[start : end + 1]),
-            start_line = start + 1,
-            end_line   = end   + 1,
-            file       = filename,
-            language   = language,
-            name       = m.group(3) if m.lastindex and m.lastindex >= 3 else "",
-        ))
-    return frags
-
-
 # ── Public API ─────────────────────────────────────────────────────────
 def detect_language(filename: str) -> str | None:
     ext = filename.rsplit(".", 1)[-1].lower()
@@ -183,39 +135,55 @@ def extract_fragments(source: str, filename: str) -> list[Fragment]:
     """
     Main entry point.
     Returns Fragment objects with exact start_line / end_line.
-    Uses tree-sitter 0.24 when available, regex otherwise.
+    Uses Python AST or Java tree-sitter, plus source blocks covering all other code.
     """
     language = detect_language(filename)
     if language is None:
         raise ValueError(f"Unsupported file type: {filename}")
 
-    if _load_tree_sitter():
+    frags = []
+    if language == "python":
+        try:
+            tree = ast.parse(source)
+            lines = source.splitlines()
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    start = min([node.lineno] + [d.lineno for d in node.decorator_list])
+                    frags.append(Fragment("\n".join(lines[start - 1:node.end_lineno]),
+                                          start, node.end_lineno, filename, language, node.name))
+        except SyntaxError:
+            pass
+    elif _load_tree_sitter():
         try:
             frags = _extract_ts(source, language, filename)
-            if frags:
-                logger.debug(f"{filename}: {len(frags)} fragments (tree-sitter)")
-                return frags
         except Exception as exc:
-            logger.warning(f"tree-sitter failed for {filename}: {exc} — using regex")
+            logger.warning(f"tree-sitter failed for {filename}: {exc} — using source blocks")
 
-    frags = _extract_regex(source, language, filename)
-    if frags:
-        logger.debug(f"{filename}: {len(frags)} fragments (regex fallback)")
-        return frags
-
-    # Fallback: if file has at least 2 non-empty lines, treat the entire file as a fragment
+    # Include top-level statements, fields and scripts outside extracted functions.
+    # Preserve blank lines and indentation so displayed lines address the original file.
     lines = source.splitlines()
-    non_empty = [l for l in lines if l.strip()]
-    if len(non_empty) >= 2:
-        clean_name = filename.replace("\\", "/").rsplit("/", 1)[-1]
-        logger.debug(f"{filename}: 1 fragment (full-file fallback)")
-        return [Fragment(
-            code       = source.strip(),
-            start_line = 1,
-            end_line   = len(lines),
-            file       = filename,
-            language   = language,
-            name       = clean_name,
-        )]
+    covered = {n for frag in frags for n in frag.line_range}
+    start = None
+    for n in range(1, len(lines) + 2):
+        if n <= len(lines) and n not in covered:
+            if start is None:
+                start = n
+        elif start is not None:
+            code = "\n".join(lines[start - 1:n - 1])
+            if code.strip():
+                frags.append(Fragment(code, start, n - 1, filename, language))
+            start = None
 
-    return []
+    # Bound long units so code past a model's input limit also gets compared.
+    chunks = {}
+    for frag in frags:
+        fragment_lines = frag.code.splitlines()
+        for offset in range(0, len(fragment_lines), 60):
+            chunk = fragment_lines[offset:offset + 80]
+            first = frag.start_line + offset
+            last = first + len(chunk) - 1
+            chunks[(first, last)] = Fragment("\n".join(chunk), first, last,
+                                             filename, language, frag.name)
+            if offset + 80 >= len(fragment_lines):
+                break
+    return [chunks[key] for key in sorted(chunks)]

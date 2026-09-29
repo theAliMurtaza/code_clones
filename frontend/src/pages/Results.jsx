@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
-import { Badge, MetricRing, EmptyState, Spinner } from '../components/UI'
+import { Badge, EmptyState } from '../components/UI'
 import CodeViewer from '../components/CodeViewer'
+import FullSourceDialog from '../components/FullSourceDialog'
 import { CLONE_TYPE_META, BADGE_CLASS } from '../utils/data'
 
 const TYPE_FILTERS = ['All', 'Type-1', 'Type-2', 'Type-3', 'Type-4']
@@ -18,7 +19,7 @@ function copyToClipboard(text, toast) {
   }
 }
 
-function ClonePairCard({ pair, index, defaultOpen, toast }) {
+function ClonePairCard({ pair, index, defaultOpen, toast, onViewFull }) {
   const [open, setOpen] = useState(defaultOpen)
   const meta   = CLONE_TYPE_META[pair.clone_type] || CLONE_TYPE_META['Type-4']
   const pct    = Math.round((pair.similarity || 0) * 100)
@@ -128,13 +129,14 @@ function ClonePairCard({ pair, index, defaultOpen, toast }) {
           </div>
 
           {/* Side-by-side code diff */}
-          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-b1" style={{ minHeight: 220, maxHeight: 440 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 auto-rows-[360px] divide-y md:divide-y-0 md:divide-x divide-b1">
             <CodeViewer
               lines={linesA}
               cloneLines={pair.clone_lines_a || []}
               cloneType={pair.clone_type}
               file={pair.file_a}
               lang={langA}
+              onViewFull={() => onViewFull({ file: pair.file_a, cloneLines: pair.clone_lines_a, cloneType: pair.clone_type })}
             />
             <CodeViewer
               lines={linesB}
@@ -142,6 +144,7 @@ function ClonePairCard({ pair, index, defaultOpen, toast }) {
               cloneType={pair.clone_type}
               file={pair.file_b}
               lang={langB}
+              onViewFull={() => onViewFull({ file: pair.file_b, cloneLines: pair.clone_lines_b, cloneType: pair.clone_type })}
             />
           </div>
 
@@ -159,24 +162,12 @@ function ClonePairCard({ pair, index, defaultOpen, toast }) {
 }
 
 export default function Results() {
-  const { jobResults, setPage, toast } = useApp()
+  const { jobResults, setPage, toast, getToken } = useApp()
   const [filter, setFilter] = useState('All')
   const [selectedFile, setSelectedFile] = useState(null)
+  const [fullSource, setFullSource] = useState(null)
 
-  if (!jobResults) {
-    return (
-      <div className="animate-fadeUp max-w-4xl mx-auto mt-10">
-        <EmptyState
-          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>}
-          title="No results to display"
-          sub="Upload a folder or source files and run an analysis to view clone detection results here."
-          action={<button onClick={() => setPage('upload')} className="btn btn-primary btn-sm">Upload Folder / Code</button>}
-        />
-      </div>
-    )
-  }
-
-  const pairs = jobResults.clone_pairs || []
+  const pairs = jobResults?.clone_pairs || []
 
   // Extract all files with clones with their paths & metadata
   const filesWithClones = useMemo(() => {
@@ -232,6 +223,19 @@ export default function Results() {
     })
   }, [pairs, filter, selectedFile])
 
+  if (!jobResults) {
+    return (
+      <div className="animate-fadeUp max-w-4xl mx-auto mt-10">
+        <EmptyState
+          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>}
+          title="No results to display"
+          sub="Upload a folder or source files and run an analysis to view clone detection results here."
+          action={<button onClick={() => setPage('upload')} className="btn btn-primary btn-sm">Upload Folder / Code</button>}
+        />
+      </div>
+    )
+  }
+
   const exportJSON = () => {
     const blob = new Blob([JSON.stringify(pairs, null, 2)], { type: 'application/json' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
@@ -258,10 +262,17 @@ export default function Results() {
     <div className="animate-fadeUp space-y-6 max-w-6xl mx-auto">
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-        <div className="md:col-span-5 card p-5 flex items-center justify-around">
-          <MetricRing value={jobResults.type1_count > 0 || jobResults.total_pairs > 0 ? 0.89 : 0} label="Precision" color="#059669"/>
-          <MetricRing value={jobResults.type1_count > 0 || jobResults.total_pairs > 0 ? 0.93 : 0} label="Recall" color="#2563eb"/>
-          <MetricRing value={jobResults.type1_count > 0 || jobResults.total_pairs > 0 ? 0.91 : 0} label="F1-Score" color="#d97706"/>
+        <div className="md:col-span-5 card p-5">
+          <div className="card-title mb-3">Files analyzed: {jobResults.files?.length || 0}</div>
+          <p className="text-xs text-t3 mb-3">Python and Java files are compared across paths. Type-4 matches require a trained semantic classifier. Similarity scores are estimates, not measured accuracy.</p>
+          <div className="max-h-40 overflow-auto space-y-2">
+            {(jobResults.files || []).map(file => (
+              <button key={file} onClick={() => setFullSource({ file })}
+                className="block text-xs font-mono text-accent text-left break-all hover:underline">
+                {file} · View full code
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="md:col-span-7 card p-5">
@@ -435,10 +446,13 @@ export default function Results() {
               index={i}
               defaultOpen={i === 0}
               toast={toast}
+              onViewFull={setFullSource}
             />
           ))}
         </div>
       )}
+      {fullSource && <FullSourceDialog key={`${jobResults.id}:${fullSource.file}`}
+        jobId={jobResults.id} token={getToken()} {...fullSource} onClose={() => setFullSource(null)} />}
     </div>
   )
 }

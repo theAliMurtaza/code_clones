@@ -57,6 +57,7 @@ def run_detection_job(self, job_id: str):
     Background task that runs the full detection pipeline for a job.
     Progress is written back to the DB so the frontend can poll for it.
     """
+    job_id = uuid.UUID(str(job_id))
     db = SessionLocal()
     try:
         # ── Mark job as running ───────────────────────────────────────
@@ -119,6 +120,7 @@ def run_detection_job(self, job_id: str):
 
     except Exception as exc:
         logger.exception(f"Job {job_id} failed: {exc}")
+        db.rollback()
         try:
             _update_job(db, job_id,
                 status       = models.JobStatus.FAILED,

@@ -16,6 +16,10 @@ Each threshold is configurable via settings.
 from __future__ import annotations
 import re
 import difflib
+import io
+import keyword
+import tokenize
+import textwrap
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -50,16 +54,39 @@ def _normalise(code: str) -> str:
     return re.sub(r'\s+', ' ', code.strip().lower())
 
 
-def token_similarity(code_a: str, code_b: str) -> float:
+_JAVA_TOKEN = re.compile(
+    r'//[^\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|'
+    r'\b\d+(?:\.\d+)?\b|[A-Za-z_$][\w$]*|>>>?=?|<<=?|==|!=|<=|>=|&&|\|\||'
+    r'\+\+|--|\*\*|//|[-+*/%&|^]=|->|\S'
+)
+
+
+def code_tokens(code: str, language: str = "python") -> list[str]:
+    """Keep operators, literals and case; ignore comments and formatting only."""
+    if language == "python":
+        try:
+            ignored = {tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE,
+                       tokenize.ENDMARKER}
+            return [('INDENT' if t.type == tokenize.INDENT else
+                     'DEDENT' if t.type == tokenize.DEDENT else t.string)
+                    for t in tokenize.generate_tokens(io.StringIO(textwrap.dedent(code)).readline)
+                    if t.type not in ignored and (t.string.strip() or t.type in (tokenize.INDENT, tokenize.DEDENT))]
+        except (tokenize.TokenError, IndentationError):
+            pass
+    return [t for t in _JAVA_TOKEN.findall(code)
+            if not t.startswith(("//", "/*"))]
+
+
+def token_similarity(code_a: str, code_b: str, language: str = "python") -> float:
     """
     difflib SequenceMatcher ratio on token lists.
     Tokens are split on word boundaries after normalisation.
     """
-    tokens_a = re.findall(r'\w+', _normalise(code_a))
-    tokens_b = re.findall(r'\w+', _normalise(code_b))
+    tokens_a = code_tokens(code_a, language)
+    tokens_b = code_tokens(code_b, language)
     if not tokens_a or not tokens_b:
         return 0.0
-    return difflib.SequenceMatcher(None, tokens_a, tokens_b).ratio()
+    return difflib.SequenceMatcher(None, tokens_a, tokens_b, autojunk=False).ratio()
 
 
 KEYWORDS = {
@@ -72,17 +99,28 @@ KEYWORDS = {
 }
 
 
-def parameterize_tokens(code: str) -> list[str]:
-    tokens = re.findall(r'\w+', _normalise(code))
+KEYWORDS.update(keyword.kwlist)
+KEYWORDS.update({'INDENT', 'DEDENT'})
+KEYWORDS.update({'byte', 'short', 'long', 'final', 'abstract', 'synchronized',
+                 'throws', 'throw', 'catch', 'switch', 'case', 'default',
+                 'package', 'instanceof', 'enum', 'assert', 'do'})
+
+
+def parameterize_tokens(code: str, language: str = "python") -> list[str]:
+    tokens = code_tokens(code, language)
     param_tokens = []
     id_map = {}
     for tok in tokens:
-        if tok in KEYWORDS or tok.isdigit():
+        if tok in KEYWORDS:
             param_tokens.append(tok)
-        else:
+        elif tok[0].isdigit() or tok.startswith(('"', "'")):
+            param_tokens.append('LITERAL')
+        elif tok.isidentifier() or re.fullmatch(r'[A-Za-z_$][\w$]*', tok):
             if tok not in id_map:
                 id_map[tok] = f'ID_{len(id_map)}'
             param_tokens.append(id_map[tok])
+        else:
+            param_tokens.append(tok)
     return param_tokens
 
 
@@ -164,4 +202,3 @@ def classify_pair(
         description  = _clone_description(clone_type, cross_lang),
         cross_language = cross_lang,
     )
-

@@ -7,20 +7,14 @@ import { SUPPORTED_EXTS } from '../utils/data'
 // Recursively traverse directory entries from drag-and-drop
 async function getFilesFromDataTransfer(items) {
   const filesWithPaths = []
-  const IGNORE_DIRS = new Set([
-    '.git', '.svn', '.hg', 'node_modules', '__pycache__',
-    '.venv', 'venv', '.idea', '.vscode', 'dist', 'build'
-  ])
-
   async function traverseEntry(entry, currentPath = '') {
     if (entry.isFile) {
       const file = await new Promise((resolve, reject) => entry.file(resolve, reject))
       const relPath = currentPath ? `${currentPath}/${file.name}` : file.name
       filesWithPaths.push({ file, path: relPath })
     } else if (entry.isDirectory) {
-      if (IGNORE_DIRS.has(entry.name)) return
       const dirReader = entry.createReader()
-      const entries = await new Promise((resolve) => {
+      const entries = await new Promise((resolve, reject) => {
         const result = []
         const readBatch = () => {
           dirReader.readEntries((batch) => {
@@ -30,7 +24,7 @@ async function getFilesFromDataTransfer(items) {
               result.push(...batch)
               readBatch()
             }
-          })
+          }, reject)
         }
         readBatch()
       })
@@ -132,7 +126,11 @@ export default function Upload() {
 
     setUploadedFiles(prev => {
       const existing = new Set(prev.map(x => x.path || x.name))
-      const fresh = added.filter(x => !existing.has(x.path))
+      const fresh = added.filter(x => {
+        if (existing.has(x.path)) return false
+        existing.add(x.path)
+        return true
+      })
       return [...prev, ...fresh]
     })
 
@@ -169,13 +167,14 @@ export default function Upload() {
           return
         }
       } catch (err) {
-        console.warn('Folder drag-drop parsing fallback:', err)
+        toast('Folder could not be read', err.message || 'Please select the folder again.', 'error')
+        return
       }
     }
     if (e.dataTransfer.files?.length > 0) {
       processAndAddFiles(e.dataTransfer.files)
     }
-  }, [processAndAddFiles])
+  }, [processAndAddFiles, toast])
 
   const removeFile = (i) => {
     setUploadedFiles(p => p.filter((_, j) => j !== i))
@@ -405,7 +404,7 @@ export default function Upload() {
               <div className="space-y-1">
                 <label className="lbl">Local Project Directory Path</label>
                 <p className="text-xs text-t3 font-mono">
-                  Enter the directory path on your system. The engine will scan subdirectories and extract all coding files.
+                  Enter the directory path on the API server. The engine will scan subdirectories and extract all coding files.
                 </p>
               </div>
 
@@ -442,7 +441,7 @@ export default function Upload() {
                 <div className="text-[11px] text-t3 leading-relaxed">
                   1. Scans the root folder and all child directories recursively.
                   <br />
-                  2. Automatically filters out git, caches, virtualenvs, and non-coding files.
+                  2. Includes Python and Java files in every subfolder; skips other file types.
                   <br />
                   3. Preserves full relative file paths so clone locations are crystal-clear.
                 </div>
