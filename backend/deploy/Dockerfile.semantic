@@ -1,0 +1,28 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DETECTION_ENGINE=full \
+    BATCH_SIZE=1 \
+    HF_HOME=/home/app/.cache/huggingface \
+    TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=2 \
+    MKL_NUM_THREADS=2 \
+    OPENBLAS_NUM_THREADS=2
+
+WORKDIR /app
+COPY deploy/requirements-semantic.txt /app/requirements.txt
+# The CPU wheel index serves x86 CPU builds; PyPI supplies the ARM CPU wheel.
+RUN pip install --no-cache-dir torch==2.3.0 --extra-index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
+
+COPY config.py semantic_service.py /app/
+COPY graphcodebert /app/graphcodebert
+RUN useradd --create-home --uid 1000 app \
+    && mkdir -p /home/app/.cache/huggingface /app/saved_models \
+    && chown -R app:app /home/app /app
+USER app
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"
+CMD ["uvicorn", "semantic_service:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "8", "--no-access-log"]

@@ -1,0 +1,35 @@
+services:
+  model:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.semantic
+    restart: unless-stopped
+    environment:
+      SEMANTIC_API_KEY: ${SEMANTIC_API_KEY:?Set SEMANTIC_API_KEY in deploy/.env}
+    volumes:
+      - model_cache:/home/app/.cache/huggingface
+    # Only the HTTPS proxy is published; inference stays inside the Docker network.
+    expose:
+      - "8000"
+    mem_limit: 6g
+    cpus: 2
+
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      MODEL_DOMAIN: ${MODEL_DOMAIN:?Set MODEL_DOMAIN in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - model
+
+volumes:
+  model_cache:
+  caddy_data:
+  caddy_config:

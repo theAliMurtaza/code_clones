@@ -260,7 +260,7 @@ export default function Upload() {
         <div>
           <h1 className="text-xl font-bold text-t1 tracking-tight">Code Clone Analysis Input</h1>
           <p className="text-xs text-t3 font-mono mt-0.5">
-            Select a project folder or source files to automatically extract and detect semantic code clones
+            Upload a Python or Java file, or a folder, to check Types 1–4 within and across files
           </p>
         </div>
 

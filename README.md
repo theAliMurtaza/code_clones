@@ -36,7 +36,10 @@ hidden and build subdirectories. Other file types are skipped. Relative paths
 identify files, so `src/main.py` and `tests/main.py` remain separate. Local path
 scanning reads a directory on the API server.
 
-All eligible fragments are compared across different files. Functions, short
+All eligible fragments are compared within each file and across different files.
+Within a file, regions that overlap are excluded so a fragment cannot match its
+own source lines. One analysis combines Types 1–3 structural matches with Type-4
+semantic candidates when the local or remote model is available. Functions, short
 scripts, and code outside functions are included; long units use overlapping
 80-line blocks. Exact and renamed clones use token comparisons that preserve
 operators and Python block structure. Near-miss matches require at least 75%
@@ -56,10 +59,17 @@ cutoff used. If only the lightweight structural engine is available, it explicit
 says Type-4 was **not checked**. Use `DETECTION_ENGINE=full` on a host with enough
 memory (at least 2 GB) and installed PyTorch/Transformers to enable the real model.
 Restart the backend after changing model configuration or adding trained weights.
+For Render Free, use `DETECTION_ENGINE=remote` with a separately hosted model:
+see [the Oracle Always Free deployment guide](backend/deploy/README.md).
+If Oracle has no capacity, use [your Windows laptop as the model server](backend/deploy/LAPTOP-SETUP.md).
+The launcher supplies an authenticated temporary HTTPS endpoint for Render;
+keep the laptop awake during analyses and update Render's URL after each restart.
 Tune thresholds and measure precision/recall on representative labeled Type-4
 positives and hard negatives; these heuristics are not an accuracy guarantee.
 
 Results show both paths, original line numbers, and matching code side by side.
+For a single-file and folder demonstration covering all four categories, see
+[the all-types demo](examples/all-types-demo/README.md).
 **View full code** opens the saved source, including for files with no matches.
 Existing analyses must be rerun to use the updated detection logic.
 

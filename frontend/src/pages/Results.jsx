@@ -181,9 +181,13 @@ export default function Results() {
         { file: p.file_b, lines: p.lines_b, type: p.clone_type },
       ]
 
+      const seenFiles = new Set()
       candidates.forEach(({ file, type }) => {
         if (!file) return
         const norm = file.replace(/\\/g, '/')
+        // A pair inside one file counts once in that file's summary.
+        if (seenFiles.has(norm)) return
+        seenFiles.add(norm)
         if (!fileMap.has(norm)) {
           const parts = norm.split('/')
           const name = parts[parts.length - 1]
@@ -263,18 +267,21 @@ export default function Results() {
   return (
     <div className="animate-fadeUp space-y-6 max-w-6xl mx-auto">
       <div className="card p-4 text-xs space-y-2" role="status">
-        <strong className="text-t1">Type-4 semantic analysis</strong>
+        <strong className="text-t1">Clone analysis coverage</strong>
         <p className="text-t2">
           {jobResults.analysis_info?.mode === 'classifier'
             ? 'Fine-tuned GraphCodeBERT classifier used. Type-4 matches appear first; Types 1–3 are also included.'
             : jobResults.analysis_info?.mode === 'embedding'
-              ? 'GraphCodeBERT base model used. Type-4 candidates appear first and need review: embedding similarity is not proof of equivalent behavior.'
+              ? 'Types 1–3 structural comparisons and GraphCodeBERT semantic analysis are enabled. Type-4 candidates appear first and need review: embedding similarity is not proof of equivalent behavior.'
               : jobResults.analysis_info?.mode === 'structural'
                 ? 'Type-4 was NOT checked: the semantic model is unavailable or lightweight mode is enabled. These results contain structural Types 1–3 only. Run with the full model to check Type-4.'
                 : jobResults.analysis_info?.mode === 'not_run'
-                  ? 'No eligible cross-file pairs were available for semantic analysis.'
+                  ? 'No eligible pairs of separate code regions were available for comparison.'
                   : 'This older analysis has no model status. Rerun it to check Type-4 with the updated detector.'}
         </p>
+        {jobResults.analysis_info?.comparison_scope === 'within_and_across_files' && (
+          <p className="text-t2">Scope: separate code regions within each file and across uploaded files. Overlapping regions are excluded.</p>
+        )}
         {jobResults.analysis_info?.semantic_threshold != null && (
           <p className="font-mono text-t3">
             Semantic pairs checked: {jobResults.analysis_info.semantic_pairs_checked} · Minimum semantic score: {Math.round(jobResults.analysis_info.semantic_threshold * 100)}%
@@ -285,7 +292,7 @@ export default function Results() {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         <div className="md:col-span-5 card p-5">
           <div className="card-title mb-3">Files analyzed: {jobResults.files?.length || 0}</div>
-          <p className="text-xs text-t3 mb-3">Python and Java files are compared across paths. All four clone types are shown below. Similarity scores are estimates, not measured accuracy.</p>
+          <p className="text-xs text-t3 mb-3">Detected pairs are grouped by clone type below. A pair is assigned one type; an analysis may not contain every type. Similarity scores are estimates, not measured accuracy.</p>
           <div className="max-h-40 overflow-auto space-y-2">
             {(jobResults.files || []).map(file => (
               <button key={file} onClick={() => setFullSource({ file })}

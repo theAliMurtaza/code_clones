@@ -65,12 +65,13 @@ def code_tokens(code: str, language: str = "python") -> list[str]:
     """Keep operators, literals and case; ignore comments and formatting only."""
     if language == "python":
         try:
-            ignored = {tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE,
+            ignored = {tokenize.COMMENT, tokenize.NL,
                        tokenize.ENDMARKER}
             return [('INDENT' if t.type == tokenize.INDENT else
-                     'DEDENT' if t.type == tokenize.DEDENT else t.string)
+                     'DEDENT' if t.type == tokenize.DEDENT else
+                     'NEWLINE' if t.type == tokenize.NEWLINE else t.string)
                     for t in tokenize.generate_tokens(io.StringIO(textwrap.dedent(code)).readline)
-                    if t.type not in ignored and (t.string.strip() or t.type in (tokenize.INDENT, tokenize.DEDENT))]
+                    if t.type not in ignored and (t.string.strip() or t.type in (tokenize.INDENT, tokenize.DEDENT, tokenize.NEWLINE))]
         except (tokenize.TokenError, IndentationError):
             pass
     return [t for t in _JAVA_TOKEN.findall(code)
@@ -100,7 +101,7 @@ KEYWORDS = {
 
 
 KEYWORDS.update(keyword.kwlist)
-KEYWORDS.update({'INDENT', 'DEDENT'})
+KEYWORDS.update({'INDENT', 'DEDENT', 'NEWLINE'})
 KEYWORDS.update({'byte', 'short', 'long', 'final', 'abstract', 'synchronized',
                  'throws', 'throw', 'catch', 'switch', 'case', 'default',
                  'package', 'instanceof', 'enum', 'assert', 'do'})

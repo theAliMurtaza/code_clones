@@ -55,13 +55,80 @@ class DetectionTests(unittest.TestCase):
                              ('b.py', 'x = "# literal" # second')]).clone_pairs
         self.assertEqual(pair.clone_type, 'Type-1')
 
+    def test_python_statement_boundaries_are_not_ignored(self):
+        # Both are valid Python, but only the second returns x. Removing the
+        # logical newline previously made their token streams identical.
+        pairs = self.detect([
+            ('a.py', 'def f(x):\n    return\n    x'),
+            ('b.py', 'def f(x):\n    return x'),
+        ]).clone_pairs
+        self.assertTrue(pairs)
+        self.assertTrue(all(p.clone_type == 'Type-3' for p in pairs))
+
+    def test_multiline_expression_formatting_remains_type1(self):
+        pair, = self.detect([
+            ('a.py', 'def f(x):\n    return (x + 1)'),
+            ('b.py', 'def f(x):\n    # comment\n    return (\n        x + 1\n    )\n'),
+        ]).clone_pairs
+        self.assertEqual(pair.clone_type, 'Type-1')
+
+    def test_inconsistent_identifier_reuse_is_not_type2(self):
+        pairs = self.detect([
+            ('a.py', 'def f(x, y):\n    return x + x'),
+            ('b.py', 'def g(a, b):\n    return a + b'),
+        ]).clone_pairs
+        self.assertTrue(pairs)
+        self.assertTrue(all(p.clone_type == 'Type-3' for p in pairs))
+
+    def test_structural_results_agree_for_single_multiple_and_nested_files(self):
+        demo = Path(__file__).resolve().parents[1] / 'examples' / 'all-types-demo'
+        sources = sorted((demo / 'folder').rglob('*.py'))
+        inputs = [
+            [('single_file.py', (demo / 'single_file.py').read_text())],
+            [(p.name, p.read_text()) for p in sources],
+            [(p.relative_to(demo).as_posix(), p.read_text()) for p in sources],
+        ]
+        for files in inputs:
+            with self.subTest(paths=[p for p, _ in files]):
+                result = self.detect(files)
+                counts = {kind: sum(p.clone_type == kind for p in result.clone_pairs)
+                          for kind in ('Type-1', 'Type-2', 'Type-3', 'Type-4')}
+                self.assertEqual(counts, {'Type-1': 1, 'Type-2': 2, 'Type-3': 3, 'Type-4': 0})
+                self.assertEqual(result.mode, 'structural')
+                self.assertEqual(result.semantic_pairs_checked, 0)
+
     def test_all_pairs_without_top_50_cutoff(self):
         pairs = self.detect([(f'dir{i}/same.py', 'value = input()') for i in range(60)]).clone_pairs
         self.assertEqual(len(pairs), 60 * 59 // 2)
         self.assertEqual(len({(p.file_a, p.file_b) for p in pairs}), len(pairs))
 
-    def test_no_self_file_matches(self):
-        self.assertEqual(self.detect([('a.py', 'def a():\n    return 1\ndef b():\n    return 1')]).clone_pairs, [])
+    def test_separate_functions_in_one_file_are_compared(self):
+        code = 'def a():\n    return 1\ndef b():\n    return 1'
+        result = self.detect([('a.py', code)])
+        pair, = result.clone_pairs
+        self.assertEqual(pair.clone_type, 'Type-2')
+        self.assertEqual((pair.file_a, pair.file_b), ('a.py', 'a.py'))
+        self.assertEqual((pair.lines_a, pair.lines_b), ([1, 2], [3, 4]))
+        self.assertEqual(result.analysis_info['comparison_scope'], 'within_and_across_files')
+
+    def test_nested_functions_do_not_match_their_own_enclosing_code(self):
+        code = 'def outer():\n    def inner():\n        return 1\n    return inner()'
+        result = self.detect([('nested.py', code)])
+        self.assertEqual(result.stage1_pairs, 0)
+        self.assertEqual(result.clone_pairs, [])
+
+    def test_overlapping_windows_are_excluded_but_separate_windows_are_compared(self):
+        code = '\n'.join('value = input()' for _ in range(200))
+        result = self.detect([('long.py', code)])
+        pair, = result.clone_pairs
+        self.assertEqual(result.stage1_pairs, 1)
+        self.assertLess(pair.lines_a[1], pair.lines_b[0])
+
+    def test_java_methods_within_one_file_are_compared(self):
+        code = 'class Example {\n    int a() { return 42; }\n    int b() { return 42; }\n}'
+        pair, = self.detect([('Example.java', code)]).clone_pairs
+        self.assertEqual(pair.clone_type, 'Type-2')
+        self.assertEqual((pair.lines_a, pair.lines_b), ([2, 2], [3, 3]))
 
     def test_unrelated_files_do_not_become_semantic_clones(self):
         self.assertEqual(self.detect([('a.py', 'print("hello")'),
@@ -82,6 +149,14 @@ class DetectionTests(unittest.TestCase):
         pairs = self.detect([('one/Example.java', code), ('two/Example.java', code)]).clone_pairs
         self.assertTrue(pairs)
         self.assertTrue(all(p.clone_type == 'Type-1' for p in pairs))
+
+    def test_python_class_headers_do_not_become_extra_clone_pairs(self):
+        code = 'class Example:\n    def value(self):\n        return 42'
+        result = self.detect([('one.py', code), ('two.py', code)])
+        self.assertEqual(result.total_fragments, 2)
+        pair, = result.clone_pairs
+        self.assertEqual(pair.clone_type, 'Type-1')
+        self.assertEqual(pair.lines_a, [2, 3])
 
     def test_semantic_classifier_failure_is_not_an_empty_success(self):
         class BrokenEngine:
@@ -214,6 +289,19 @@ class FolderApiTests(unittest.TestCase):
             result = self.client.get('/api/jobs/' + response.json()['job_id'], headers=headers)
             self.assertEqual(result.status_code, 200, result.text)
             self.assertEqual(result.json()['status'], 'done')
+
+    def test_single_file_upload_persists_both_regions_and_type_counts(self):
+        code = 'def a():\n    return 1\n\ndef b():\n    return 1'
+        response = self.client.post('/api/detect', files=[('files', ('single.py', code))])
+        self.assertEqual(response.status_code, 202, response.text)
+        job = self.client.get('/api/jobs/' + response.json()['job_id']).json()
+        self.assertEqual(job['status'], 'done', job)
+        self.assertEqual(job['total_pairs'], 1)
+        self.assertEqual(job['type2_count'], 1)
+        pair, = job['clone_pairs']
+        self.assertEqual((pair['file_a'], pair['file_b']), ('single.py', 'single.py'))
+        self.assertEqual((pair['lines_a'], pair['lines_b']), ([1, 2], [4, 5]))
+        self.assertEqual(job['analysis_info']['comparison_scope'], 'within_and_across_files')
 
     def test_malformed_token_subject_returns_401_not_server_error(self):
         from auth import create_access_token

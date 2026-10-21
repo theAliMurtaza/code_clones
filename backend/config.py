@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # "auto" selects the low-memory lexical engine on Render and GraphCodeBERT
     # elsewhere. Set to "full" only on an instance with at least 2 GB RAM.
     DETECTION_ENGINE: str  = "auto"
+    # Offload semantic inference from small web instances to a separate server.
+    SEMANTIC_API_URL: str = ""
+    SEMANTIC_API_KEY: str = ""
+    SEMANTIC_API_TIMEOUT: float = 180.0
     USE_GPU:          bool = False
     MODEL_CACHE_DIR:  str  = "./model_cache"
     # GraphCodeBERT attention uses substantial memory on CPU. Keep batches small

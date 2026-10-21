@@ -22,6 +22,10 @@ _engine_instance: Optional["GraphCodeBERTEngine"] = None
 
 def get_engine() -> "GraphCodeBERTEngine":
     global _engine_instance
+    if settings.DETECTION_ENGINE.strip().lower() == "remote":
+        from graphcodebert.remote import RemoteSemanticEngine
+        # Re-check readiness and model mode for every job, including after outages.
+        return RemoteSemanticEngine()
     if _engine_instance is None:
         _engine_instance = GraphCodeBERTEngine()
     return _engine_instance

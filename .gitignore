@@ -12,6 +12,8 @@ backend/**/*.py[cod]
 
 # Runtime configuration and local data
 backend/.env
+backend/deploy/.env
+backend/deploy/.laptop-model/
 *.sqlite3
 
 # Editor and OS files

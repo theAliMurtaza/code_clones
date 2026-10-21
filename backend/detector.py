@@ -1,4 +1,4 @@
-"""Compare every cross-file fragment pair, with optional trained semantic scoring."""
+"""Compare distinct code regions within and across files, with semantic scoring."""
 
 from __future__ import annotations
 import logging
@@ -54,7 +54,8 @@ class DetectionResult:
     @property
     def analysis_info(self):
         return {"mode": self.mode, "semantic_pairs_checked": self.semantic_pairs_checked,
-                "semantic_threshold": self.semantic_threshold}
+                "semantic_threshold": self.semantic_threshold,
+                "comparison_scope": "within_and_across_files"}
 
 
 def run_detection(files: list, threshold: float = None, engine=None) -> DetectionResult:
@@ -70,7 +71,8 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
     # Ignore empty/comment-only fragments and isolated closing braces.
     usable = [(f, t) for f, t in zip(fragments, tokens)
               if len(t) >= 3 and any(token.isidentifier() for token in t)
-              and not (t[-1] in ("{", ":") and any(k in t for k in ("class", "interface", "enum")))]
+              and not (next((v for v in reversed(t) if v != "NEWLINE"), "") in ("{", ":")
+                       and any(k in t for k in ("class", "interface", "enum")))]
     fragments = [f for f, _ in usable]
     tokens = [t for _, t in usable]
     result.total_fragments = len(fragments)
@@ -79,8 +81,13 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
             f"Analysis is limited to {settings.MAX_FRAGMENTS_PER_JOB} code fragments per job; "
             f"received {len(fragments)}. Split the folder into smaller uploads."
         )
+    # A single file can contain several cloned functions. Compare separate regions
+    # in that file too, but never a nested function with its enclosing function,
+    # or two sliding windows sharing source lines: that would compare code to itself.
     candidates = [(i, j) for i, j in combinations(range(len(fragments)), 2)
-                  if fragments[i].file != fragments[j].file]
+                  if (fragments[i].file != fragments[j].file
+                      or fragments[i].end_line < fragments[j].start_line
+                      or fragments[j].end_line < fragments[i].start_line)]
     result.stage1_pairs = len(candidates)
     if not candidates:
         result.runtime_seconds = round(time.perf_counter() - started, 3)
