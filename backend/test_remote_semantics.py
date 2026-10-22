@@ -182,6 +182,13 @@ class RealRemoteModelTests(unittest.TestCase):
                 with patch("graphcodebert.remote.httpx.Client",
                            side_effect=lambda **kw: RealClient(transport=transport, **kw)):
                     engine = RemoteSemanticEngine()
+                    from test_detection_quality import FREQUENCY, SUM, TOTAL, FACTORIAL
+                    for a, b in ((FREQUENCY, SUM), (TOTAL, FACTORIAL)):
+                        with self.subTest(counterexample=a.splitlines()[0]):
+                            rejection = run_detection([
+                                UploadedFile('a.py', a), UploadedFile('nested/b.py', b)
+                            ], threshold=0.5, engine=engine)
+                            self.assertEqual(rejection.clone_pairs, [])
                     result = run_detection([
                         UploadedFile("recursive.py", FACT_REC),
                         UploadedFile("iterative.py", FACT_ITER),

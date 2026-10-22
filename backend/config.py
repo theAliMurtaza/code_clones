@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     TYPE3_TOK_SIM:     float = 0.30   # token sim lower-bound for Type-3 (near-miss syntactic)
     TYPE4_SEM_SIM:     float = 0.50   # semantic sim for Type-4 (pure semantic clone)
     TYPE4_EMBEDDING_SIM: float = 0.85  # Uncalibrated candidate cutoff for the base model
+    # Only for >=5 agreeing bounded checks with >=3 distinct outputs. Still a
+    # candidate heuristic, not an equivalence proof or calibrated probability.
+    TYPE4_CORROBORATED_EMBEDDING_SIM: float = 0.70
 
     # ── File handling ─────────────────────────────────────────────────
     MAX_FILE_SIZE_MB:    int = 10

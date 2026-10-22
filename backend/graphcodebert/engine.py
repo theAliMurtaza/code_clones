@@ -204,7 +204,7 @@ class GraphCodeBERTEngine:
     # ── DFG extraction ────────────────────────────────────────────────
     def _extract_dataflow(self, code: str, lang: str):
         if lang not in self._parsers:
-            return self._tokenizer.tokenize(code)[:CODE_LENGTH], []
+            raise RuntimeError(f"Data-flow parser unavailable for {lang}; semantic analysis was not completed")
         sys.path.insert(0, str(_HERE))
         from parser.utils import (
             remove_comments_and_docstrings,
@@ -237,12 +237,12 @@ class GraphCodeBERTEngine:
             dfg = [d for d in dfg if d[1] in used]
             return code_tokens, dfg
         except Exception as exc:
-            logger.debug(f"DFG extraction error ({lang}): {exc}")
-            return self._tokenizer.tokenize(code)[:CODE_LENGTH], []
+            # Retokenizing already-tokenized BPE pieces corrupts the model input.
+            # Report extraction failure rather than returning misleading scores.
+            raise RuntimeError(f"Cannot read {lang} code for semantic analysis") from exc
 
     # ── Feature encoding ──────────────────────────────────────────────
     def _encode_fragment(self, code: str, lang: str) -> dict:
-        import torch
         tokenizer         = self._tokenizer
         code_tokens, dfg  = self._extract_dataflow(code, lang)
         sub_tokens        = []
@@ -254,7 +254,13 @@ class GraphCodeBERTEngine:
             sub_tokens.extend(sub)
 
         keep       = CODE_LENGTH + DFG_LENGTH - 3 - min(len(dfg), DFG_LENGTH)
-        sub_tokens = sub_tokens[:min(keep, 509)]
+        limit = min(keep, 509)
+        if len(sub_tokens) > limit:
+            raise ValueError(
+                f"Code region has {len(sub_tokens)} model tokens; the limit is {limit}. "
+                "Split this region into smaller units. Semantic analysis was not completed; "
+                "no truncated comparison was used."
+            )
         src_tokens = [tokenizer.cls_token] + sub_tokens + [tokenizer.sep_token]
         src_ids    = tokenizer.convert_tokens_to_ids(src_tokens)
         pos_idx    = [i + tokenizer.pad_token_id + 1 for i in range(len(src_tokens))]

@@ -168,3 +168,63 @@ $env:TRANSFORMERS_OFFLINE='1'
 
 These check authentication, lifecycle handling, real semantic candidates, renamed
 clones and an unrelated negative example. They are not an accuracy benchmark.
+
+## Detection-quality update
+
+Deploy the updated backend (including `behavior_check.py`, `classifier.py`,
+`detector.py` and `config.py`) and frontend. Restart the laptop model to load the
+updated GraphCodeBERT input reader. A tunnel restart creates a new URL: copy it
+from `Laptop-Model.ps1 status` into Render's `SEMANTIC_API_URL`. Then run a new
+analysis; saved results are not recomputed.
+
+Type-3 now uses weighted syntax overlap, retaining literal values and giving
+punctuation less influence. This favors precision but may miss some near misses.
+Types 1–2 retain their existing exact/normalized-token rules.
+
+For Type-4, a restricted AST interpreter looks for different outputs on the same
+bounded inputs. It supports a subset of pure Python, with strict step, recursion,
+container and integer limits. It cannot execute imports, attributes, files, network
+calls, `eval` or `exec`. Different observed outputs reject a semantic candidate.
+Disjoint tested input domains can also reject a candidate. These checks assume
+the functions' domains are not restricted by an external contract; domain-specific
+functions may need review. Java, unsupported syntax and exhausted budgets are
+reported as inconclusive, never as behaviorally verified.
+
+The base model normally needs a cosine score of 0.85. A candidate with at least
+five agreeing checks and three distinct outputs may use the separate 0.70 floor
+(`TYPE4_CORROBORATED_EMBEDDING_SIM`). The user's chosen threshold still applies.
+This is an experimental decision rule, not a learned/calibrated probability.
+Constant outputs alone cannot lower the floor. Unchecked high-score candidates
+still require review. No model weights were trained or replaced by this update.
+
+Model input extraction now handles UTF-8 byte offsets correctly. A missing parser
+or a region over 509 model subword tokens fails explicitly rather than producing
+scores from corrupted or truncated input; split an oversized region into smaller
+units. The earlier 80-line chunking is not a guarantee of fitting that token limit.
+
+For the targeted real-model comparison:
+
+```powershell
+.\.venv311\Scripts\python.exe evaluate_detection_quality.py
+```
+
+Run this from `backend` with the same offline and thread environment settings used
+for the integration tests. See `examples/accuracy-evaluation` for the results and
+their limitations. These development fixtures do not establish general accuracy.
+
+### Apply the revised detector
+
+Deploy the updated backend and frontend, including `behavior_check.py`. Restart
+the laptop model service so it loads the updated model-input reader:
+
+```powershell
+.\Laptop-Model.ps1 stop
+.\Laptop-Model.ps1 start
+.\Laptop-Model.ps1 status
+```
+
+Run these from `backend/deploy`. Once ready, update Render's `SEMANTIC_API_URL`
+to the new tunnel URL and save/deploy. Keep the existing private key. Start a new
+analysis: stored results are not automatically recomputed. New results expose
+`detector_revision: weighted-syntax-counterexamples-v2` and per-pair Type-4
+descriptions distinguish agreeing bounded samples from unverified behavior.

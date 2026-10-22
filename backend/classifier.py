@@ -137,6 +137,33 @@ def parameterized_token_similarity(code_a: str, code_b: str) -> float:
     return difflib.SequenceMatcher(None, pt_a, pt_b).ratio()
 
 
+def near_miss_tokens(tokens, parameterized):
+    # Type-2 already handles literal-only changes. For near misses retain literal
+    # values so different accumulator identities (0 vs 1) remain evidence.
+    return [original if normalized == 'LITERAL' else normalized
+            for original, normalized in zip(tokens, parameterized)]
+
+
+def near_miss_similarity(a, b):
+    """Weighted token overlap: delimiters must not dominate algorithm content.
+
+    Identifiers receive half weight and syntax delimiters one tenth; operators,
+    control keywords and literal values retain full weight. This is a structural
+    heuristic, not a calibrated probability or semantic equivalence check.
+    """
+    delimiters = {'(', ')', '{', '}', ':', ',', ';', 'INDENT', 'DEDENT', 'NEWLINE'}
+    def weight(token):
+        return 0.1 if token in delimiters else 0.5 if token.startswith('ID_') else 1.0
+    total = sum(map(weight, a)) + sum(map(weight, b))
+    if not total:
+        return 0.0
+    # SequenceMatcher tie-breaking can be asymmetric; use the conservative result.
+    def matched(x, y):
+        return sum(sum(map(weight, x[i:i + size]))
+                   for i, _, size in difflib.SequenceMatcher(None, x, y, autojunk=False).get_matching_blocks())
+    return 2 * min(matched(a, b), matched(b, a)) / total
+
+
 def _clone_description(clone_type: str, cross_lang: bool) -> str:
     descs = {
         "Type-1": "Exact copy — only whitespace or comment differences",

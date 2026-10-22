@@ -23,6 +23,7 @@ function ClonePairCard({ pair, index, defaultOpen, toast, onViewFull }) {
   const [open, setOpen] = useState(defaultOpen)
   const meta   = CLONE_TYPE_META[pair.clone_type] || CLONE_TYPE_META['Type-4']
   const pct    = Math.round((pair.similarity || 0) * 100)
+  const scoreLabel = pair.clone_type === 'Type-4' ? 'Model score' : 'Structural similarity'
   const langA  = pair.file_a?.endsWith('.py') ? 'Python' : pair.file_a?.endsWith('.java') ? 'Java' : ''
   const langB  = pair.file_b?.endsWith('.py') ? 'Python' : pair.file_b?.endsWith('.java') ? 'Java' : ''
   const isSameFile = pair.file_a === pair.file_b
@@ -78,7 +79,7 @@ function ClonePairCard({ pair, index, defaultOpen, toast, onViewFull }) {
         {pair.cross_language && <Badge type="blue">Cross-lang</Badge>}
 
         {/* Similarity Score */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0" title={`${scoreLabel}; not detection accuracy`}>
           <div className="hidden sm:block w-16 h-1.5 bg-s3 rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width: pct + '%', background: meta.color }}/>
           </div>
@@ -151,9 +152,11 @@ function ClonePairCard({ pair, index, defaultOpen, toast, onViewFull }) {
           {/* Footer */}
           <div className="flex flex-wrap gap-4 sm:gap-6 px-4 sm:px-5 py-2 bg-s2 border-t border-b1 text-[10px] font-mono text-t3">
             <span>Clone lines: <strong className="text-t2">{pair.clone_lines_a?.length ?? 0} (A) · {pair.clone_lines_b?.length ?? 0} (B)</strong></span>
-            <span>Similarity: <strong style={{ color: meta.color }}>{pct}%</strong></span>
+            <span>{scoreLabel}: <strong style={{ color: meta.color }}>{pct}%</strong></span>
             <span>Token sim: <strong className="text-t2">{pair.token_sim != null ? Math.round(pair.token_sim * 100) + '%' : '—'}</strong></span>
             {pair.cross_language && <span className="text-accent font-semibold">Cross-language detected</span>}
+            {pair.clone_type === 'Type-3' && <span className="basis-full">Structural similarity measures syntax overlap, not equivalent behavior. New analyses weight operators and literal values more than punctuation.</span>}
+            {pair.clone_type === 'Type-4' && <span className="basis-full">Model score is not verified correctness or a measured accuracy percentage. Review both implementations.</span>}
           </div>
         </div>
       )}
@@ -284,8 +287,12 @@ export default function Results() {
         )}
         {jobResults.analysis_info?.semantic_threshold != null && (
           <p className="font-mono text-t3">
-            Semantic pairs checked: {jobResults.analysis_info.semantic_pairs_checked} · Minimum semantic score: {Math.round(jobResults.analysis_info.semantic_threshold * 100)}%
+            Semantic pairs checked: {jobResults.analysis_info.semantic_pairs_checked} · Standard minimum score: {Math.round(jobResults.analysis_info.semantic_threshold * 100)}%
+            {jobResults.analysis_info.semantic_corroborated_threshold != null && <> · With diverse agreeing Python checks: {Math.round(jobResults.analysis_info.semantic_corroborated_threshold * 100)}%</>}
           </p>
+        )}
+        {['weighted-syntax-counterexamples-v1', 'weighted-syntax-counterexamples-v2'].includes(jobResults.analysis_info?.detector_revision) && (
+          <p className="text-t2">Behavior checks rejected {jobResults.analysis_info.behavioral_rejections} semantic candidates. Accepted candidates: {jobResults.analysis_info.behavioral_consistent} agreed on bounded Python samples; {jobResults.analysis_info.behavioral_inconclusive} could not be checked. Sample agreement is not proof of equivalence; Java and unsupported Python require review.</p>
         )}
       </div>
       {/* Metrics Row */}

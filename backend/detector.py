@@ -9,7 +9,9 @@ import numpy as np
 
 from config import get_settings
 from fragmenter import Fragment, extract_fragments
-from classifier import code_tokens, parameterize_tokens, _clone_description
+from classifier import (code_tokens, parameterize_tokens, _clone_description,
+                        near_miss_tokens, near_miss_similarity)
+from behavior_check import probe, compare_probes
 from difflib import SequenceMatcher
 from itertools import combinations
 
@@ -50,12 +52,21 @@ class DetectionResult:
     mode:            str   = "not_run"
     semantic_pairs_checked: int = 0
     semantic_threshold: float | None = None
+    semantic_corroborated_threshold: float | None = None
+    behavioral_rejections: int = 0
+    behavioral_consistent: int = 0
+    behavioral_inconclusive: int = 0
 
     @property
     def analysis_info(self):
         return {"mode": self.mode, "semantic_pairs_checked": self.semantic_pairs_checked,
                 "semantic_threshold": self.semantic_threshold,
-                "comparison_scope": "within_and_across_files"}
+                "semantic_corroborated_threshold": self.semantic_corroborated_threshold,
+                "comparison_scope": "within_and_across_files",
+                "detector_revision": "weighted-syntax-counterexamples-v2",
+                "behavioral_rejections": self.behavioral_rejections,
+                "behavioral_consistent": self.behavioral_consistent,
+                "behavioral_inconclusive": self.behavioral_inconclusive}
 
 
 def run_detection(files: list, threshold: float = None, engine=None) -> DetectionResult:
@@ -102,13 +113,15 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
     if semantic_available:
         result.semantic_threshold = max(threshold, settings.TYPE4_SEM_SIM if engine.is_fine_tuned
                                         else settings.TYPE4_EMBEDDING_SIM)
+        if not engine.is_fine_tuned:
+            result.semantic_corroborated_threshold = max(threshold, settings.TYPE4_CORROBORATED_EMBEDDING_SIM)
     parameterized = [parameterize_tokens(f.code, f.language) for f in fragments]
-    scored, semantic_candidates = {}, []
+    substantive = [near_miss_tokens(t, p) for t, p in zip(tokens, parameterized)]
+    scored, semantic_candidates, semantic_evidence = {}, [], {}
     for i, j in candidates:
         a, b = fragments[i], fragments[j]
         tok = SequenceMatcher(None, tokens[i], tokens[j], autojunk=False).ratio()
-        param = SequenceMatcher(None, parameterized[i], parameterized[j], autojunk=False).ratio()
-        ctype, score = None, max(tok, param)
+        ctype, score = None, near_miss_similarity(substantive[i], substantive[j])
         if a.language == b.language:
             if tokens[i] == tokens[j]:
                 ctype, score = "Type-1", 1.0
@@ -118,8 +131,13 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
                 ctype = "Type-3"
         if ctype and score >= threshold:
             scored[(i, j)] = (ctype, score, tok)
-        if ctype not in ("Type-1", "Type-2") and semantic_available:
+        if ctype is None and semantic_available:
             semantic_candidates.append((i, j))
+
+    # Probe each Python fragment once. This never executes uploaded Python code;
+    # the restricted AST interpreter only manipulates bounded primitive values.
+    behavioral = {i: probe(fragments[i].code) if fragments[i].language == 'python' else None
+                  for i in {k for pair in semantic_candidates for k in pair}}
 
     # Embed each fragment once. No lexical/cosine pre-filter or top-k cutoff:
     # semantically equivalent implementations can have very different tokens.
@@ -151,22 +169,43 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
         for (i, j), prob in zip(batch, probabilities):
             # Keep Type-3 for syntactically similar code; Type-4 describes the
             # remaining semantic matches, including cross-language pairs.
-            if prob >= cutoff and (i, j) not in scored:
+            possible_cutoff = (cutoff if engine.is_fine_tuned else
+                               min(cutoff, result.semantic_corroborated_threshold))
+            if prob >= possible_cutoff and (i, j) not in scored:
+                evidence = compare_probes(behavioral[i], behavioral[j])
+                if evidence.status == 'different':
+                    result.behavioral_rejections += 1
+                    continue
+                corroborated = (evidence.status == 'consistent' and evidence.checked >= 5
+                                and evidence.diverse_outputs >= 3)
+                accepted_cutoff = possible_cutoff if corroborated else cutoff
+                if prob < accepted_cutoff:
+                    continue
+                if evidence.status == 'consistent':
+                    result.behavioral_consistent += 1
+                else:
+                    result.behavioral_inconclusive += 1
                 tok = SequenceMatcher(None, tokens[i], tokens[j], autojunk=False).ratio()
                 scored[(i, j)] = ("Type-4", float(prob), tok)
+                semantic_evidence[(i, j)] = evidence
 
     for (i, j), (ctype, score, tok) in scored.items():
         a, b = fragments[i], fragments[j]
         cross = a.language != b.language
+        description = _clone_description(ctype, cross)
+        if ctype == "Type-4":
+            evidence = semantic_evidence[(i, j)]
+            model = "base-model semantic similarity" if result.mode == "embedding" else "classifier score"
+            checks = (f"{evidence.checked} bounded Python samples agree; not proof of equivalence"
+                      if evidence.status == "consistent" else "behavior unverified; review required")
+            description = f"Type-4 candidate — {model}; {checks}"
         result.clone_pairs.append(DetectedClone(
             file_a=a.file, file_b=b.file,
             lines_a=[a.start_line, a.end_line], lines_b=[b.start_line, b.end_line],
             clone_lines_a=a.line_range, clone_lines_b=b.line_range,
             clone_type=ctype, similarity=round(score, 6), token_sim=round(tok, 6),
             cross_language=cross,
-            description=("Type-4 candidate — base-model semantic similarity; review behavior"
-                         if ctype == "Type-4" and result.mode == "embedding"
-                         else _clone_description(ctype, cross)),
+            description=description,
             code_a=a.code, code_b=b.code,
         ))
     result.clone_pairs.sort(key=lambda p: (p.clone_type != "Type-4", -p.similarity,

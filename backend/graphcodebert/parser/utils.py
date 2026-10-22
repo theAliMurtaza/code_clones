@@ -84,15 +84,11 @@ def tree_to_variable_index(root_node,index_to_code):
         return code_tokens    
 
 def index_to_code_token(index,code):
-    start_point=index[0]
-    end_point=index[1]
-    if start_point[0]==end_point[0]:
-        s=code[start_point[0]][start_point[1]:end_point[1]]
-    else:
-        s=""
-        s+=code[start_point[0]][start_point[1]:]
-        for i in range(start_point[0]+1,end_point[0]):
-            s+=code[i]
-        s+=code[end_point[0]][:end_point[1]]   
-    return s
-   
+    # Tree-sitter columns are UTF-8 byte offsets, not Python character offsets.
+    (start_row, start_col), (end_row, end_col) = index
+    if start_row == end_row:
+        return code[start_row].encode('utf-8')[start_col:end_col].decode('utf-8')
+    parts = [code[start_row].encode('utf-8')[start_col:]]
+    parts.extend(line.encode('utf-8') for line in code[start_row + 1:end_row])
+    parts.append(code[end_row].encode('utf-8')[:end_col])
+    return b'\n'.join(parts).decode('utf-8')

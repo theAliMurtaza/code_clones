@@ -1,4 +1,5 @@
 // CodeViewer — renders code with line numbers and highlighted clone lines.
+import { highlightSegments } from '../utils/codeHighlight'
 
 const TYPE_COLORS = {
   'Type-1': { bg: 'rgba(34,197,94,.12)',   border: '#22c55e', num: '#22c55e' },
@@ -9,38 +10,12 @@ const TYPE_COLORS = {
 
 // Minimal syntax colouring (Python + Java) — dark theme colors
 function ColourLine({ text }) {
-  if (!text.trim()) return <span>&nbsp;</span>
-
-  const segments = []
-  let key = 0
-
-  const PY_KW   = /\b(def|class|return|if|elif|else|for|while|try|except|import|from|in|not|and|or|True|False|None|with|as|pass|raise|yield|lambda|async|await)\b/
-  const JAVA_KW = /\b(public|private|protected|static|void|int|String|boolean|List|Map|new|class|return|if|else|for|while|try|catch|finally|throws|import|extends|implements|this|super|null|true|false)\b/
-  const STR     = /(["'`])(?:(?!\1)[^\\]|\\.)*?\1/
-  const CMT     = /(#.*|\/\/.*|\/\*[\s\S]*?\*\/)/
-  const NUM     = /\b\d+\.?\d*\b/
-  const FN      = /\b([a-zA-Z_]\w*)\s*(?=\()/
-
-  const combined = new RegExp(
-    `(${CMT.source})|(${STR.source})|(${PY_KW.source})|(${JAVA_KW.source})|(${FN.source})|(${NUM.source})`,
-    'g'
-  )
-
-  let last = 0, m
-  while ((m = combined.exec(text)) !== null) {
-    if (m.index > last) segments.push(<span key={key++} style={{ color: '#c9d8ef' }}>{text.slice(last, m.index)}</span>)
-    const v = m[0]
-    if      (m[1])              segments.push(<span key={key++} style={{ color: '#5e7494', fontStyle: 'italic' }}>{v}</span>)      // comment → muted
-    else if (m[3] !== undefined) segments.push(<span key={key++} style={{ color: '#a78bfa', fontWeight: 500 }}>{v}</span>)         // keyword → violet
-    else if (m[5] !== undefined || m[6] !== undefined)
-                                segments.push(<span key={key++} style={{ color: '#60a5fa', fontWeight: 500 }}>{v}</span>)          // Java KW → blue
-    else if (m[7] !== undefined) segments.push(<span key={key++} style={{ color: '#34d399' }}>{v}</span>)                          // string → emerald
-    else if (m[8] !== undefined) segments.push(<span key={key++} style={{ color: '#86efac' }}>{v}</span>)                          // function name → green
-    else if (m[9] !== undefined) segments.push(<span key={key++} style={{ color: '#fbbf24' }}>{v}</span>)                          // number → amber
-    last = m.index + v.length
-  }
-  if (last < text.length) segments.push(<span key={key++} style={{ color: '#c9d8ef' }}>{text.slice(last)}</span>)
-  return <>{segments.length ? segments : <span style={{ color: '#c9d8ef' }}>{text}</span>}</>
+  const colors = { plain: '#c9d8ef', comment: '#5e7494', string: '#34d399',
+    keyword: '#60a5fa', function: '#86efac', number: '#fbbf24' }
+  return <>{highlightSegments(text).map((segment, i) => (
+    <span key={i} style={{ color: colors[segment.kind] || colors.plain,
+      fontStyle: segment.kind === 'comment' ? 'italic' : undefined }}>{segment.text}</span>
+  ))}</>
 }
 
 export default function CodeViewer({ lines = [], cloneLines = [], cloneType = 'Type-4', file = '', lang = '', onViewFull }) {

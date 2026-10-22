@@ -3,7 +3,8 @@
 Run either example with the laptop model running and Render configured for
 `DETECTION_ENGINE=remote`, or a local backend using the full GraphCodeBERT model.
 Use a similarity threshold of 0.50 for this demonstration. The base-model Type-4
-cutoff remains at least 0.85; the UI threshold does not lower that minimum.
+cutoff is 0.85, or 0.70 when multiple diverse bounded Python checks agree.
+The UI threshold still applies; sample agreement is not proof of equivalence.
 
 - **Single file:** upload `single_file.py` alone. Its two `add` definitions are
   intentionally duplicated source for analysis; do not use this file as a library.

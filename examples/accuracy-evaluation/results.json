@@ -1,0 +1,138 @@
+{
+  "scope": "13 hand-authored regression examples; not a representative accuracy benchmark",
+  "weights": "microsoft/graphcodebert-base, no fine-tuned checkpoint",
+  "cases": [
+    {
+      "case": "exact_with_comment",
+      "expected": "Type-1",
+      "previous": "Type-1",
+      "current": "Type-1",
+      "cosine": 1.0,
+      "behavioral_rejections": 0,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "renamed_total",
+      "expected": "Type-2",
+      "previous": "Type-2",
+      "current": "Type-2",
+      "cosine": 0.920465,
+      "behavioral_rejections": 0,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "near_miss_extra_operation",
+      "expected": "Type-3",
+      "previous": "Type-3",
+      "current": "Type-3",
+      "cosine": 0.977187,
+      "behavioral_rejections": 0,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "factorial_recursion",
+      "expected": "Type-4",
+      "previous": null,
+      "current": "Type-4",
+      "cosine": 0.7618,
+      "behavioral_rejections": 0,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 1
+    },
+    {
+      "case": "sum_builtin",
+      "expected": "Type-4",
+      "previous": null,
+      "current": "Type-4",
+      "cosine": 0.714668,
+      "behavioral_rejections": 0,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 1
+    },
+    {
+      "case": "abs_branch_vs_builtin",
+      "expected": "Type-4",
+      "previous": "Type-4",
+      "current": "Type-4",
+      "cosine": 0.88326,
+      "behavioral_rejections": 0,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 1
+    },
+    {
+      "case": "sum_while_vs_builtin",
+      "expected": "Type-4",
+      "previous": "Type-4",
+      "current": "Type-4",
+      "cosine": 0.894042,
+      "behavioral_rejections": 0,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 1
+    },
+    {
+      "case": "frequency_vs_sum",
+      "expected": null,
+      "previous": "Type-4",
+      "current": null,
+      "cosine": 0.906162,
+      "behavioral_rejections": 1,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "sum_vs_factorial",
+      "expected": null,
+      "previous": "Type-3",
+      "current": null,
+      "cosine": 0.811231,
+      "behavioral_rejections": 1,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "reversal_vs_sorting",
+      "expected": null,
+      "previous": "Type-4",
+      "current": null,
+      "cosine": 0.973316,
+      "behavioral_rejections": 1,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "frequency_vs_factorial",
+      "expected": null,
+      "previous": null,
+      "current": null,
+      "cosine": 0.808638,
+      "behavioral_rejections": 1,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "sum_vs_greeting",
+      "expected": null,
+      "previous": null,
+      "current": null,
+      "cosine": 0.778309,
+      "behavioral_rejections": 1,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "factorial_vs_greeting",
+      "expected": null,
+      "previous": null,
+      "current": null,
+      "cosine": 0.773342,
+      "behavioral_rejections": 1,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    }
+  ],
+  "previous_exact_labels": 8,
+  "current_exact_labels": 13
+}
