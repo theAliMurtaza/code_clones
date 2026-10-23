@@ -1,5 +1,6 @@
 """Queued Gradio transport for ZeroGPU; reuse all semantic response validation."""
 from concurrent.futures import TimeoutError
+import re
 from urllib.parse import urlsplit
 from config import get_settings
 from graphcodebert.remote import RemoteSemanticEngine
@@ -9,9 +10,22 @@ class GradioSemanticEngine(RemoteSemanticEngine):
     def _request(self, method, path, payload=None):
         settings = get_settings()
         parsed = urlsplit(self.url)
-        if (parsed.scheme != 'https' or not parsed.hostname.endswith('.hf.space')
-                or parsed.path not in ('', '/') or parsed.port not in (None, 443)):
-            raise ValueError('For Gradio, set SEMANTIC_API_URL to the Space https://...hf.space URL')
+        source = None
+        if parsed.scheme == 'https' and parsed.port in (None, 443):
+            if parsed.hostname.endswith('.hf.space') and parsed.path in ('', '/'):
+                source = self.url
+            elif parsed.hostname == 'huggingface.co':
+                match = re.fullmatch(
+                    r'/spaces/([A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*)/?',
+                    parsed.path,
+                )
+                if match:
+                    # The SDK resolves the actual host with the HF token, which
+                    # also works for private Spaces and avoids guessed hostnames.
+                    source = match.group(1)
+        if source is None:
+            raise ValueError('For Gradio, set SEMANTIC_API_URL to '
+                             'https://huggingface.co/spaces/OWNER/NAME or the Space https://...hf.space URL')
         try:
             from gradio_client import Client
         except ImportError:
@@ -20,7 +34,7 @@ class GradioSemanticEngine(RemoteSemanticEngine):
         try:
             # Keep the HF Authorization header separate from the model key.
             # No code, credentials, or remote exception body is printed to logs.
-            client = Client(self.url, token=settings.HF_TOKEN or False,
+            client = Client(source, token=settings.HF_TOKEN or False,
                             headers={'X-Semantic-Api-Key': settings.SEMANTIC_API_KEY},
                             # Keep SDK worker defaults: one request also needs SSE
                             # readers and cancellation workers. The Space limits

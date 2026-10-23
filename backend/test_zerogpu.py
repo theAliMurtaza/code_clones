@@ -103,4 +103,43 @@ class ZeroTests(unittest.TestCase):
             self.assertNotIn(KEY,str(error.exception))
 
 
+class SpaceURLTests(unittest.TestCase):
+    def test_page_and_app_urls_forward_separate_credentials(self):
+        cases = [
+            ('https://huggingface.co/spaces/Ali-eng/clonescope-model', 'Ali-eng/clonescope-model'),
+            ('https://huggingface.co/spaces/Ali-eng/clonescope-model/', 'Ali-eng/clonescope-model'),
+            ('https://example-clone.hf.space', 'https://example-clone.hf.space'),
+            ('https://example-clone.hf.space/', 'https://example-clone.hf.space'),
+        ]
+        for url, source in cases:
+            with self.subTest(url=url), \
+                 patch.multiple(get_settings(), SEMANTIC_API_URL=url, SEMANTIC_API_KEY=KEY,
+                                HF_TOKEN='hf_test_only'), \
+                 patch('gradio_client.Client') as client:
+                client.return_value.submit.return_value.result.return_value = {
+                    'protocol':1, 'mode':'embedding'}
+                engine = GradioSemanticEngine()
+                self.assertEqual(engine.mode, 'embedding')
+                self.assertEqual(client.call_args.args, (source,))
+                self.assertEqual(client.call_args.kwargs['token'], 'hf_test_only')
+                self.assertEqual(client.call_args.kwargs['headers'], {'X-Semantic-Api-Key':KEY})
+                client.return_value.close.assert_called_once()
+
+    def test_unrelated_or_non_root_urls_rejected_before_client(self):
+        for url in [
+            'https://huggingface.co/Ali-eng',
+            'https://huggingface.co/spaces/Ali-eng/clonescope-model/settings',
+            'https://huggingface.co.evil.example/spaces/Ali-eng/clonescope-model',
+            'https://example-clone.hf.space/gradio_api',
+            'https://example-clone.hf.space.evil.example',
+            'http://example-clone.hf.space',
+            'https://huggingface.co/spaces/Ali-eng/clonescope-model?token=secret',
+        ]:
+            with self.subTest(url=url), \
+                 patch.multiple(get_settings(), SEMANTIC_API_URL=url, SEMANTIC_API_KEY=KEY), \
+                 patch('gradio_client.Client') as client:
+                with self.assertRaises(ValueError):GradioSemanticEngine()
+                client.assert_not_called()
+
+
 if __name__ == '__main__':unittest.main()

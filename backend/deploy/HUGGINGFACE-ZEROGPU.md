@@ -95,14 +95,18 @@ ZeroGPU/torch stack. The app imports `spaces` first and initializes the model on
 CUDA at startup, as required by the current ZeroGPU runtime. GPU inference runs
 inside `@spaces.GPU` functions.
 
-Open the running app in a new tab and copy its actual direct URL:
+Copy the Space page URL from your browser. The updated Render client accepts it
+directly and uses your HF token to resolve the actual app host:
 
 ```text
-https://YOUR-ACTUAL-SPACE-HOST.hf.space
+https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
 ```
 
-Use that URL, not `https://huggingface.co/spaces/USERNAME/NAME`, and not a guessed
-hostname. It remains stable across ordinary Space restarts.
+For this deployment, use `https://huggingface.co/spaces/Ali-eng/clonescope-model`.
+An actual direct `https://...hf.space` URL is also accepted. Do not append
+`/settings`, `/tree/main`, or an API endpoint to either URL. Both forms remain
+stable across ordinary Space restarts. Older backend deployments accept only
+the direct app URL, so deploy the updated backend before using the page URL.
 
 ## 5. Deploy the backend changes to Render
 
@@ -122,7 +126,7 @@ In **Render → your backend → Environment**, set:
 | --- | --- |
 | `DETECTION_ENGINE` | `remote` |
 | `SEMANTIC_API_TRANSPORT` | `gradio` |
-| `SEMANTIC_API_URL` | Your actual `https://...hf.space` URL |
+| `SEMANTIC_API_URL` | `https://huggingface.co/spaces/Ali-eng/clonescope-model` |
 | `SEMANTIC_API_KEY` | Exactly the same key as the Space secret |
 | `HF_TOKEN` | Your Hugging Face read/scoped token |
 | `SEMANTIC_API_TIMEOUT` | `300` |
@@ -152,7 +156,7 @@ You no longer need to update a Cloudflare tunnel URL after laptop restarts.
   share that account's allowance. A busy Space, quota exhaustion, or a cold start
   can delay or fail an analysis. This is not unlimited, always-available hosting.
 * **Type-4 service failure:** check that the Space is Running, hardware is ZeroGPU,
-  both model keys match, the HF token has Space access, the direct URL is correct,
+  both model keys match, the HF token has Space access, the Space URL is correct,
   and Render deployed the new client. A failed GPU request must not be presented
   as a completed Type-4 scan.
 * **`SEMANTIC_API_KEY` startup error:** add the Space secret and restart the Space.
