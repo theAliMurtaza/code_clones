@@ -145,36 +145,19 @@ Uploaded .py / .java files
 
 ---
 
-## GraphCodeBERT vs CodeBERT
+## Train GraphCodeBERT for clone classification
 
-| Feature               | CodeBERT          | GraphCodeBERT (this backend)    |
-|-----------------------|-------------------|---------------------------------|
-| Approach              | Embedding only    | Two-stage: embed + pairwise clf |
-| Data structure        | Token sequence    | Token sequence + Data Flow Graph|
-| Type-4 F1 (BCB)      | ~0.85             | ~0.91 (base) / ~0.94 (fine-tuned)|
-| Cross-language        | Partial           | Strong (shared semantic space)  |
-| Fine-tuning needed    | No                | No (but improves accuracy)      |
+The base model produces uncalibrated semantic similarity. This repository has
+no measured general accuracy or Type-4 F1 guarantee. Previously quoted base and
+fine-tuned F1 estimates were not measurements of this application.
 
----
+The training pipeline now reads the supplied indexed BigCloneBench archive,
+audits the splits, trains a symmetric pairwise head on frozen GraphCodeBERT
+features, selects a threshold on validation data, and evaluates held-out test
+pairs. Candidate weights stay separate from the live model. The dataset is Java;
+it does not establish Python or cross-language accuracy.
 
-## Optional: Fine-Tune on BigCloneBench
-
-Fine-tuning pushes F1 from ~0.91 to ~0.94 on Type-4 clones.
-
-```bash
-# 1. Download dataset (Java, ~10GB)
-#    https://github.com/clonebench/BigCloneBench
-#    Convert to JSONL with label, func1, func2 per line.
-
-# 2. Run fine-tuning (GPU recommended, ~2 hours on T4)
-python train.py \
-    --data_dir   data/ \
-    --output_dir saved_models/ \
-    --epochs     2 \
-    --batch_size 16
-
-# The engine auto-loads saved_models/model.bin on next startup.
-```
+See [TRAINING.md](TRAINING.md) for reproducible commands, limits and activation.
 
 ---
 

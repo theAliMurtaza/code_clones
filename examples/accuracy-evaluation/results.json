@@ -1,5 +1,6 @@
 {
-  "scope": "13 hand-authored regression examples; not a representative accuracy benchmark",
+  "scope": "18 hand-authored regression examples; not a representative accuracy benchmark",
+  "detector_revision": "behavior-required-v3",
   "weights": "microsoft/graphcodebert-base, no fine-tuned checkpoint",
   "cases": [
     {
@@ -131,8 +132,58 @@
       "behavioral_rejections": 1,
       "behavioral_inconclusive": 0,
       "behavioral_consistent": 0
+    },
+    {
+      "case": "maximum_vs_even_filter",
+      "expected": null,
+      "previous": "Type-4",
+      "current": null,
+      "cosine": 0.902311,
+      "behavioral_rejections": 1,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "sum_vs_frequency_get",
+      "expected": null,
+      "previous": "Type-3",
+      "current": null,
+      "cosine": 0.898953,
+      "behavioral_rejections": 1,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "deduplicate_vs_frequency",
+      "expected": null,
+      "previous": "Type-4",
+      "current": null,
+      "cosine": 0.898745,
+      "behavioral_rejections": 1,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 0
+    },
+    {
+      "case": "even_loop_vs_comprehension",
+      "expected": "Type-4",
+      "previous": "Type-4",
+      "current": "Type-4",
+      "cosine": 0.863809,
+      "behavioral_rejections": 0,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 1
+    },
+    {
+      "case": "frequency_branches_vs_get",
+      "expected": "Type-4",
+      "previous": "Type-4",
+      "current": "Type-4",
+      "cosine": 0.864851,
+      "behavioral_rejections": 0,
+      "behavioral_inconclusive": 0,
+      "behavioral_consistent": 1
     }
   ],
-  "previous_exact_labels": 8,
-  "current_exact_labels": 13
+  "previous_exact_labels": 10,
+  "current_exact_labels": 18
 }

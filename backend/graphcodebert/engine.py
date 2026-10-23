@@ -23,6 +23,11 @@ _engine_instance: Optional["GraphCodeBERTEngine"] = None
 def get_engine() -> "GraphCodeBERTEngine":
     global _engine_instance
     if settings.DETECTION_ENGINE.strip().lower() == "remote":
+        if settings.SEMANTIC_API_TRANSPORT.strip().lower() == "gradio":
+            from graphcodebert.gradio_remote import GradioSemanticEngine
+            return GradioSemanticEngine()
+        if settings.SEMANTIC_API_TRANSPORT.strip().lower() != "http":
+            raise ValueError('SEMANTIC_API_TRANSPORT must be http or gradio')
         from graphcodebert.remote import RemoteSemanticEngine
         # Re-check readiness and model mode for every job, including after outages.
         return RemoteSemanticEngine()
@@ -80,6 +85,8 @@ class GraphCodeBERTEngine:
         self._device_pref      = device
         self._model_loaded     = False
         self._fine_tuned_loaded = False
+        self.classifier_threshold = None
+        self.validated_language_pairs = []
         self._lightweight      = False
         self._load()
 
@@ -131,8 +138,8 @@ class GraphCodeBERTEngine:
             )
 
             self._device = (
-                "cuda" if (self._device_pref == "auto" and torch.cuda.is_available())
-                else "cpu"
+                ("cuda" if torch.cuda.is_available() else "cpu")
+                if self._device_pref == "auto" else self._device_pref
             )
             logger.info(f"GraphCodeBERT on {self._device.upper()}")
 
@@ -151,18 +158,21 @@ class GraphCodeBERTEngine:
             self._model_loaded = True
 
             if os.path.isfile(self._saved_model_path):
-                state = torch.load(self._saved_model_path, map_location=self._device)
-                self._clf_model.load_state_dict(state, strict=True)
+                from graphcodebert.training_artifact import load_head_artifact
+                state, metadata = load_head_artifact(self._saved_model_path)
+                self._clf_model.classifier.load_state_dict(state, strict=True)
+                self.classifier_threshold = metadata['threshold']
+                self.validated_language_pairs = metadata['validated_language_pairs']
                 self._fine_tuned_loaded = True
                 logger.info(
                     f"Fine-tuned weights loaded from {self._saved_model_path}\n"
-                    "   → Pairwise classifier will be used (highest accuracy)"
+                    "   → Validated pairwise head and its validation-selected threshold loaded"
                 )
             else:
                 logger.info(
                     "No fine-tuned weights found at saved_models/model.bin\n"
                     "   → Embedding similarity will produce uncalibrated semantic candidates\n"
-                    "   → Run train.py on BigCloneBench to enable pairwise classifier"
+                    "   → Train and evaluate a pairwise head before activating classifier mode"
                 )
 
             self._load_parsers()
@@ -200,6 +210,16 @@ class GraphCodeBERTEngine:
                     logger.warning(f"DFG parser failed for {lang_name}: {e}")
         except Exception as exc:
             logger.warning(f"Parser loading failed ({exc}) — DFG will be empty")
+
+    @classmethod
+    def for_preprocessing(cls):
+        """Use the production tokenizer/DFG encoder without loading model weights."""
+        from transformers import RobertaTokenizer
+        engine = cls.__new__(cls)
+        engine._tokenizer = RobertaTokenizer.from_pretrained(MODEL_NAME, local_files_only=True)
+        engine._parsers = {}
+        engine._load_parsers()
+        return engine
 
     # ── DFG extraction ────────────────────────────────────────────────
     def _extract_dataflow(self, code: str, lang: str):
@@ -322,9 +342,12 @@ class GraphCodeBERTEngine:
                 all_ids.append(enc["input_ids"])
                 all_pos.append(enc["position_idx"])
                 all_masks.append(amask)
-            ids_t  = torch.tensor(all_ids,             dtype=torch.long).to(self._device)
-            pos_t  = torch.tensor(all_pos,             dtype=torch.long).to(self._device)
-            mask_t = torch.tensor(np.array(all_masks), dtype=torch.bool).to(self._device)
+            # Remove padding only, never source or DFG tokens. Attention cost is
+            # quadratic; short functions need not pay for 640 padded positions.
+            active = max(sum(p != self._tokenizer.pad_token_id for p in pos) for pos in all_pos)
+            ids_t  = torch.tensor(all_ids, dtype=torch.long)[:, :active].to(self._device)
+            pos_t  = torch.tensor(all_pos, dtype=torch.long)[:, :active].to(self._device)
+            mask_t = torch.tensor(np.array(all_masks), dtype=torch.bool)[:, :active, :active].to(self._device)
             with torch.no_grad():
                 nodes_mask = pos_t.eq(0)
                 token_mask = pos_t.ge(2)
@@ -362,8 +385,9 @@ class GraphCodeBERTEngine:
             return [float(round(s, 6)) for s in sims]
         import torch
         probs = []
-        for start in range(0, len(pairs), 8):
-            chunk = pairs[start: start + 8]
+        batch_size = max(1, min(settings.BATCH_SIZE, 8))
+        for start in range(0, len(pairs), batch_size):
+            chunk = pairs[start: start + batch_size]
             ids1, pos1, mask1 = [], [], []
             ids2, pos2, mask2 = [], [], []
             for ca, la, cb, lb in chunk:

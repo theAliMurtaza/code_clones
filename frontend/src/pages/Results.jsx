@@ -273,7 +273,7 @@ export default function Results() {
         <strong className="text-t1">Clone analysis coverage</strong>
         <p className="text-t2">
           {jobResults.analysis_info?.mode === 'classifier'
-            ? 'Fine-tuned GraphCodeBERT classifier used. Type-4 matches appear first; Types 1–3 are also included.'
+            ? 'Fine-tuned GraphCodeBERT classifier used. Type-4 candidates appear first; Types 1–3 are also included.'
             : jobResults.analysis_info?.mode === 'embedding'
               ? 'Types 1–3 structural comparisons and GraphCodeBERT semantic analysis are enabled. Type-4 candidates appear first and need review: embedding similarity is not proof of equivalent behavior.'
               : jobResults.analysis_info?.mode === 'structural'
@@ -293,6 +293,12 @@ export default function Results() {
         )}
         {['weighted-syntax-counterexamples-v1', 'weighted-syntax-counterexamples-v2'].includes(jobResults.analysis_info?.detector_revision) && (
           <p className="text-t2">Behavior checks rejected {jobResults.analysis_info.behavioral_rejections} semantic candidates. Accepted candidates: {jobResults.analysis_info.behavioral_consistent} agreed on bounded Python samples; {jobResults.analysis_info.behavioral_inconclusive} could not be checked. Sample agreement is not proof of equivalence; Java and unsupported Python require review.</p>
+        )}
+        {jobResults.analysis_info?.semantic_policy === 'requires_diverse_behavioral_agreement' && (
+          <p className="text-t2">Type-4 requires model similarity plus at least five agreeing Python samples with three distinct outputs. Behavior checks rejected {jobResults.analysis_info.behavioral_rejections} candidates; {jobResults.analysis_info.behavioral_inconclusive} candidates were withheld because evidence was insufficient. {jobResults.analysis_info.behavioral_consistent} candidates met these checks. Java and unsupported Python are not confirmed by these checks. Sample agreement is not proof of equivalence, and no reported matches does not prove that the code has no semantic clones.</p>
+        )}
+        {jobResults.analysis_info?.semantic_policy === 'validated_classifier_or_diverse_behavioral_agreement' && (
+          <p className="text-t2">Type-4 requires diverse agreeing Python checks or a trained classifier that passed evaluation for the language pair. Behavior checks rejected {jobResults.analysis_info.behavioral_rejections} candidates and {jobResults.analysis_info.behavioral_inconclusive} were withheld for insufficient evidence. Accepted: {jobResults.analysis_info.behavioral_consistent} with agreeing samples, {jobResults.analysis_info.classifier_supported} using classifier evidence. Neither route proves equivalence, and no reported matches does not rule out semantic clones.</p>
         )}
       </div>
       {/* Metrics Row */}

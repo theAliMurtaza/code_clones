@@ -28,6 +28,7 @@ CMPOPS = {ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt,
           ast.LtE: operator.le, ast.Gt: operator.gt, ast.GtE: operator.ge,
           ast.In: lambda a, b: a in b, ast.NotIn: lambda a, b: a not in b}
 BUILTINS = {'range', 'len', 'sum', 'sorted', 'min', 'max', 'abs'}
+METHODS = {'append', 'get'}
 
 
 def bounded(value):
@@ -71,11 +72,14 @@ class Program:
         allowed = (ast.Module, ast.FunctionDef, ast.arguments, ast.arg, ast.Return,
                    ast.Assign, ast.AugAssign, ast.Expr, ast.If, ast.For, ast.While,
                    ast.Pass, ast.Name, ast.Constant, ast.List, ast.Tuple, ast.Dict,
-                   ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare, ast.Call,
+                   ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare, ast.Call, ast.Attribute,
                    ast.Subscript, ast.Slice, ast.IfExp, ast.Load, ast.Store,
                    ast.ListComp, ast.comprehension,
                    ast.USub, ast.UAdd, ast.Not, ast.And, ast.Or,
                    *BINOPS, *CMPOPS)
+        method_targets = {id(node.func) for node in ast.walk(tree)
+                          if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                          and node.func.attr in METHODS}
         for index, node in enumerate(ast.walk(tree)):
             if index > 2500:
                 raise Unsupported('syntax limit')
@@ -88,9 +92,13 @@ class Program:
             if (isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
                     and node.id in BUILTINS | {self.fn.name}):
                 raise Unsupported('shadowed call binding')
-            if isinstance(node, ast.Call) and (not isinstance(node.func, ast.Name)
-                    or node.func.id not in BUILTINS | {self.fn.name} or node.keywords):
-                raise Unsupported('call')
+            if isinstance(node, ast.Attribute) and id(node) not in method_targets:
+                raise Unsupported('attribute access')
+            if isinstance(node, ast.Call):
+                named = isinstance(node.func, ast.Name) and node.func.id in BUILTINS | {self.fn.name}
+                method = id(node.func) in method_targets
+                if not (named or method) or node.keywords:
+                    raise Unsupported('call')
         self.steps = 0
 
     def tick(self):
@@ -177,6 +185,10 @@ class Program:
     def binary(self, op, left, right):
         # Check before operations that could allocate large objects.
         if isinstance(op, ast.Mod) and isinstance(left, str):
+            if '%' not in left and type(right) in (int, float, bool):
+                # E.g. an even-number filter given a string sample. Python
+                # rejects this input; no formatting/allocation is necessary.
+                raise TypeError('not all arguments converted during string formatting')
             raise Unsupported('string formatting')
         if isinstance(op, ast.Pow) and (type(right) not in (int, float) or abs(right) > 16):
             raise Unsupported('power limit')
@@ -240,6 +252,24 @@ class Program:
                     bounded(result)
             return result
         if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute):
+                # Explicit dispatch on interpreter-owned primitive containers;
+                # never use getattr or expose arbitrary Python methods/objects.
+                receiver = self.expr(node.func.value, env, depth)
+                args = [self.expr(v, env, depth) for v in node.args]
+                if node.func.attr == 'append':
+                    if type(receiver) is not list or len(args) != 1:
+                        raise TypeError('append requires a list and one value')
+                    if len(receiver) >= 64:
+                        raise Unsupported('container limit')
+                    receiver.append(args[0])
+                    bounded(receiver)
+                    return None
+                if node.func.attr == 'get':
+                    if type(receiver) is not dict or len(args) not in (1, 2):
+                        raise TypeError('get requires a dict and one or two values')
+                    return bounded(receiver.get(*args))
+                raise Unsupported('method')
             args = [self.expr(v, env, depth) for v in node.args]
             name = node.func.id
             if name in env:

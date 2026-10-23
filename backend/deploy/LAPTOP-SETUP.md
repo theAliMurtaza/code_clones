@@ -183,19 +183,25 @@ Types 1–2 retain their existing exact/normalized-token rules.
 
 For Type-4, a restricted AST interpreter looks for different outputs on the same
 bounded inputs. It supports a subset of pure Python, with strict step, recursion,
-container and integer limits. It cannot execute imports, attributes, files, network
-calls, `eval` or `exec`. Different observed outputs reject a semantic candidate.
+container and integer limits. It supports only explicit `list.append` and
+`dict.get` method calls on interpreter-owned containers; other attribute access,
+imports, files, network calls, `eval` and `exec` are unsupported. Different observed
+outputs reject a semantic candidate.
 Disjoint tested input domains can also reject a candidate. These checks assume
 the functions' domains are not restricted by an external contract; domain-specific
 functions may need review. Java, unsupported syntax and exhausted budgets are
-reported as inconclusive, never as behaviorally verified.
+reported as inconclusive and withheld from Type-4 results.
 
-The base model normally needs a cosine score of 0.85. A candidate with at least
-five agreeing checks and three distinct outputs may use the separate 0.70 floor
-(`TYPE4_CORROBORATED_EMBEDDING_SIM`). The user's chosen threshold still applies.
+Every Type-4 candidate now requires at least five agreeing checks and three
+distinct outputs, including candidates scored by a fine-tuned classifier. For
+the base model, these checks permit the 0.70 floor
+(`TYPE4_CORROBORATED_EMBEDDING_SIM`, capped by the standard floor). The user's
+chosen threshold still applies.
 This is an experimental decision rule, not a learned/calibrated probability.
-Constant outputs alone cannot lower the floor. Unchecked high-score candidates
-still require review. No model weights were trained or replaced by this update.
+Constant outputs alone and unchecked high-score candidates cannot enter Type-4
+results. This reduces false positives at the cost of missing semantic clones that
+cannot be checked. Types 1–3 still use structural rules and do not require equal
+behavior. No model weights were trained or replaced by this update.
 
 Model input extraction now handles UTF-8 byte offsets correctly. A missing parser
 or a region over 509 model subword tokens fails explicitly rather than producing
@@ -226,5 +232,19 @@ the laptop model service so it loads the updated model-input reader:
 Run these from `backend/deploy`. Once ready, update Render's `SEMANTIC_API_URL`
 to the new tunnel URL and save/deploy. Keep the existing private key. Start a new
 analysis: stored results are not automatically recomputed. New results expose
-`detector_revision: weighted-syntax-counterexamples-v2` and per-pair Type-4
-descriptions distinguish agreeing bounded samples from unverified behavior.
+`detector_revision: behavior-required-v3`. Per-pair Type-4 descriptions report
+agreeing bounded samples; analysis metadata counts rejected and withheld candidates.
+
+For the v3 behavior-check changes alone, deploy the backend and frontend and run
+a new analysis. The running laptop model does not need restarting: its weights and
+API are unchanged, and the new acceptance checks run on the backend. Keeping the
+current laptop session also preserves its tunnel URL.
+
+### Trained classifier update (v4)
+
+The v4 backend additionally honors the operating threshold and evaluated language
+pairs of an eligible trained head. A classifier evaluated only on Java does not
+provide evidence for Python or cross-language pairs. Behavioral counterexamples
+still reject a pair regardless of the model score. Base embedding mode retains
+the strict v3 checks. See [TRAINING.md](../TRAINING.md) for dataset scope,
+candidate evaluation and checkpoint activation; no pilot installs itself.

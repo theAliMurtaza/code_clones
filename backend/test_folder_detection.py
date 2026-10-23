@@ -167,16 +167,19 @@ class DetectionTests(unittest.TestCase):
             run_detection([UploadedFile('a.py', 'print("hello")'),
                            UploadedFile('b.java', 'System.out.println("hello");')], engine=BrokenEngine())
 
-    def test_trained_classifier_can_report_cross_language_match(self):
+    def test_trained_classifier_also_requires_behavioral_evidence(self):
         class TrainedEngine:
             is_fine_tuned = True
             def predict_batch(self, pairs):
                 return [0.95] * len(pairs)
         result = run_detection([UploadedFile('a.py', 'print("hello")'),
                                 UploadedFile('b.java', 'System.out.println("hello");')], engine=TrainedEngine())
-        pair, = result.clone_pairs
-        self.assertEqual(pair.clone_type, 'Type-4')
-        self.assertTrue(pair.cross_language)
+        self.assertEqual(result.clone_pairs, [])
+        self.assertEqual(result.behavioral_inconclusive, 1)
+        from test_detection_quality import FACTORIAL, RECURSIVE
+        supported = run_detection([UploadedFile('a.py', FACTORIAL),
+                                   UploadedFile('b.py', RECURSIVE)], engine=TrainedEngine())
+        self.assertEqual(supported.clone_pairs[0].clone_type, 'Type-4')
 
     def test_base_model_checks_low_overlap_pairs_once_and_keeps_other_types(self):
         class BaseEngine:
@@ -195,7 +198,8 @@ class DetectionTests(unittest.TestCase):
         self.assertEqual(engine.calls, 1)
         self.assertEqual(result.mode, 'embedding')
         self.assertEqual(result.semantic_pairs_checked, 5)
-        self.assertEqual(result.clone_pairs[0].clone_type, 'Type-4')
+        self.assertFalse(any(p.clone_type == 'Type-4' for p in result.clone_pairs))
+        self.assertEqual(result.behavioral_inconclusive, 2)
         self.assertTrue(any(p.clone_type == 'Type-1' for p in result.clone_pairs))
         self.assertTrue(all('candidate' in p.description for p in result.clone_pairs if p.clone_type == 'Type-4'))
         self.assertFalse(any('other.java' in (p.file_a, p.file_b) for p in result.clone_pairs))

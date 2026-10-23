@@ -56,6 +56,7 @@ class DetectionResult:
     behavioral_rejections: int = 0
     behavioral_consistent: int = 0
     behavioral_inconclusive: int = 0
+    classifier_supported: int = 0
 
     @property
     def analysis_info(self):
@@ -63,10 +64,12 @@ class DetectionResult:
                 "semantic_threshold": self.semantic_threshold,
                 "semantic_corroborated_threshold": self.semantic_corroborated_threshold,
                 "comparison_scope": "within_and_across_files",
-                "detector_revision": "weighted-syntax-counterexamples-v2",
+                "detector_revision": "evaluated-classifier-v4",
+                "semantic_policy": "validated_classifier_or_diverse_behavioral_agreement",
                 "behavioral_rejections": self.behavioral_rejections,
                 "behavioral_consistent": self.behavioral_consistent,
-                "behavioral_inconclusive": self.behavioral_inconclusive}
+                "behavioral_inconclusive": self.behavioral_inconclusive,
+                "classifier_supported": self.classifier_supported}
 
 
 def run_detection(files: list, threshold: float = None, engine=None) -> DetectionResult:
@@ -113,6 +116,8 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
     if semantic_available:
         result.semantic_threshold = max(threshold, settings.TYPE4_SEM_SIM if engine.is_fine_tuned
                                         else settings.TYPE4_EMBEDDING_SIM)
+        if engine.is_fine_tuned and getattr(engine, 'classifier_threshold', None) is not None:
+            result.semantic_threshold = max(result.semantic_threshold, engine.classifier_threshold)
         if not engine.is_fine_tuned:
             result.semantic_corroborated_threshold = max(threshold, settings.TYPE4_CORROBORATED_EMBEDDING_SIM)
     parameterized = [parameterize_tokens(f.code, f.language) for f in fragments]
@@ -163,12 +168,11 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
         if (len(probabilities) != len(batch) or not np.all(np.isfinite(probabilities))
                 or (engine.is_fine_tuned and any(p < 0 or p > 1 for p in probabilities))):
             raise RuntimeError("The semantic classifier returned invalid scores")
-        cutoff = max(threshold, settings.TYPE4_SEM_SIM if engine.is_fine_tuned
-                     else settings.TYPE4_EMBEDDING_SIM)
+        cutoff = result.semantic_threshold
         result.semantic_pairs_checked += len(batch)
         for (i, j), prob in zip(batch, probabilities):
             # Keep Type-3 for syntactically similar code; Type-4 describes the
-            # remaining semantic matches, including cross-language pairs.
+            # remaining semantic matches with sufficient behavioral evidence.
             possible_cutoff = (cutoff if engine.is_fine_tuned else
                                min(cutoff, result.semantic_corroborated_threshold))
             if prob >= possible_cutoff and (i, j) not in scored:
@@ -178,13 +182,21 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
                     continue
                 corroborated = (evidence.status == 'consistent' and evidence.checked >= 5
                                 and evidence.diverse_outputs >= 3)
-                accepted_cutoff = possible_cutoff if corroborated else cutoff
-                if prob < accepted_cutoff:
+                language_pair = ':'.join(sorted((fragments[i].language, fragments[j].language)))
+                classifier_supported = (engine.is_fine_tuned
+                    and getattr(engine, 'classifier_threshold', None) is not None
+                    and language_pair in getattr(engine, 'validated_language_pairs', []))
+                # Similar embeddings alone do not establish equivalent behavior.
+                # Base scores fail closed without behavioral evidence. A trained
+                # head may use its evaluated language scope and threshold, but
+                # observed counterexamples above always override its score.
+                if not corroborated and not classifier_supported:
+                    result.behavioral_inconclusive += 1
                     continue
-                if evidence.status == 'consistent':
+                if corroborated:
                     result.behavioral_consistent += 1
                 else:
-                    result.behavioral_inconclusive += 1
+                    result.classifier_supported += 1
                 tok = SequenceMatcher(None, tokens[i], tokens[j], autojunk=False).ratio()
                 scored[(i, j)] = ("Type-4", float(prob), tok)
                 semantic_evidence[(i, j)] = evidence
@@ -197,7 +209,8 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
             evidence = semantic_evidence[(i, j)]
             model = "base-model semantic similarity" if result.mode == "embedding" else "classifier score"
             checks = (f"{evidence.checked} bounded Python samples agree; not proof of equivalence"
-                      if evidence.status == "consistent" else "behavior unverified; review required")
+                      if evidence.status == 'consistent' and evidence.checked >= 5 and evidence.diverse_outputs >= 3
+                      else 'evaluated classifier for this language pair; behavior unverified; review required')
             description = f"Type-4 candidate — {model}; {checks}"
         result.clone_pairs.append(DetectedClone(
             file_a=a.file, file_b=b.file,

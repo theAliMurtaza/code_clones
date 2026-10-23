@@ -1,0 +1,12 @@
+# Gradio comes from README sdk_version; keep its hub version compatible with
+# the existing, tested Transformers encoder. Do not upload backend/requirements.txt.
+spaces==0.51.3
+torch==2.8.0
+transformers==4.41.2
+huggingface-hub==0.36.0
+# Spaces installs gradio[mcp,oauth]; MCP requires pydantic-settings >=2.5.2.
+pydantic-settings==2.5.2
+numpy==1.26.4
+tree-sitter==0.24.0
+tree-sitter-python==0.23.6
+tree-sitter-java==0.23.5

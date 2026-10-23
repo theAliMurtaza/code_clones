@@ -74,11 +74,12 @@ class RemoteTests(unittest.TestCase):
                      side_effect=lambda **kw: RealClient(transport=transport, **kw))
 
     def test_remote_embeddings_feed_type4_pipeline(self):
+        from test_detection_quality import FACTORIAL, RECURSIVE
         with self.client():
             engine = RemoteSemanticEngine()
             result = run_detection([
-                UploadedFile("a.py", 'print("hello")'),
-                UploadedFile("b.java", 'System.out.println("hello");')], engine=engine)
+                UploadedFile("a.py", FACTORIAL),
+                UploadedFile("b.py", RECURSIVE)], engine=engine)
         self.assertEqual(result.mode, "embedding")
         self.assertEqual(result.semantic_pairs_checked, 1)
         self.assertEqual(result.clone_pairs[0].clone_type, "Type-4")
@@ -112,6 +113,25 @@ class RemoteTests(unittest.TestCase):
             self.assertTrue(engine.is_fine_tuned)
             self.assertEqual(engine.embed_batch(["pass"] * 17, ["python"] * 17).shape, (17, 768))
             self.assertEqual(engine.predict_batch([("pass", "python", "pass", "python")] * 9), [0.95] * 9)
+
+    def test_evaluated_threshold_crosses_service_boundary(self):
+        self.model.is_fine_tuned = True
+        self.model.classifier_threshold = .97
+        self.model.validated_language_pairs = ['java:java']
+        with self.client():
+            engine = RemoteSemanticEngine()
+            self.assertEqual(engine.classifier_threshold, .97)
+            self.assertEqual(engine.validated_language_pairs, ['java:java'])
+            self.model.classifier_threshold = .9
+            with self.assertRaisesRegex(RuntimeError, 'metadata changed'):
+                engine.predict_batch([('pass','python','pass','python')])
+
+    def test_invalid_evaluation_scope_is_rejected(self):
+        self.model.is_fine_tuned = True
+        self.model.validated_language_pairs = ['java:java']
+        with self.client():
+            with self.assertRaisesRegex(RuntimeError, 'metadata'):
+                RemoteSemanticEngine()
 
     def test_bad_key_never_calls_model(self):
         with patch.object(self.model, "embed_batch") as embed:
@@ -202,7 +222,7 @@ class RealRemoteModelTests(unittest.TestCase):
                             assert_all_types(self, run_detection(files, threshold=0.5, engine=engine))
                 pairs = {frozenset((p.file_a, p.file_b)): p.clone_type for p in result.clone_pairs}
                 self.assertEqual(pairs[frozenset(("recursive.py", "iterative.py"))], "Type-4")
-                self.assertEqual(pairs[frozenset(("sort.py", "Sort.java"))], "Type-4")
+                self.assertNotIn(frozenset(("sort.py", "Sort.java")), pairs)
                 self.assertEqual(pairs[frozenset(("sort.py", "renamed.py"))], "Type-2")
                 self.assertFalse(any("greet.py" in files for files in pairs))
                 self.assertGreater(result.semantic_pairs_checked, 0)

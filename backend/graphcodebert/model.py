@@ -17,7 +17,14 @@ class RobertaClassificationHead(nn.Module):
 
     def forward(self, features, **kwargs):
         x = features[:, 0, :]  # take <s> token (equiv. to [CLS])
-        x = x.reshape(-1,x.size(-1)*2)
+        pairs = x.reshape(-1, 2, x.size(-1))
+        return self.forward_vectors(pairs[:, 0], pairs[:, 1])
+
+    def forward_vectors(self, left, right):
+        # Clone scoring must be invariant to which file is uploaded first.
+        # Differences and products let the head learn pair relationships rather
+        # than the individual functions' locations in an ordered concatenation.
+        x = torch.cat((torch.abs(left - right), left * right), dim=-1)
         x = self.dropout(x)
         x = self.dense(x)
         x = torch.tanh(x)

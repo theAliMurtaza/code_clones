@@ -10,6 +10,10 @@ __pycache__/
 .env
 .env.*
 deploy/.laptop-model/
+training_runs/
+data/
+.venv-hf/
+deploy/.hf-space*/
 *.log
 
 .pytest_cache/

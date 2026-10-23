@@ -29,6 +29,18 @@ class RemoteSemanticEngine:
         if self.mode not in {"embedding", "classifier"}:
             raise RuntimeError("Remote model is not ready for Type-4 analysis")
         self.is_fine_tuned = self.mode == "classifier"
+        self.classifier_threshold = info.get('classifier_threshold')
+        self.validated_language_pairs = info.get('validated_language_pairs', [])
+        if (self.classifier_threshold is not None and
+                (type(self.classifier_threshold) not in (float, int)
+                 or not 0 < self.classifier_threshold <= 1)):
+            raise RuntimeError('Invalid remote classifier threshold')
+        if (not isinstance(self.validated_language_pairs, list)
+                or any(p not in ['java:java', 'python:python', 'java:python']
+                       for p in self.validated_language_pairs)
+                or (self.validated_language_pairs and
+                    (not self.is_fine_tuned or self.classifier_threshold is None))):
+            raise RuntimeError('Invalid remote classifier evaluation metadata')
 
     def _request(self, method, path, payload=None):
         try:
@@ -54,6 +66,9 @@ class RemoteSemanticEngine:
         data = self._request("POST", path, payload)
         if data.get("mode") != self.mode:
             raise RuntimeError("Remote model mode changed during analysis; retry the job")
+        if (data.get('classifier_threshold') != self.classifier_threshold
+                or data.get('validated_language_pairs', []) != self.validated_language_pairs):
+            raise RuntimeError('Remote classifier metadata changed during analysis; retry the job')
         return data
 
     def embed_batch(self, codes, langs):

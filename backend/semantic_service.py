@@ -87,7 +87,10 @@ def create_app(engine_factory=None):
             raise HTTPException(401, "Invalid model API key")
 
     def info():
-        return {"protocol": 1, "mode": "classifier" if app.state.engine.is_fine_tuned else "embedding"}
+        engine = app.state.engine
+        return {"protocol": 1, "mode": "classifier" if engine.is_fine_tuned else "embedding",
+                "classifier_threshold": getattr(engine, 'classifier_threshold', None),
+                "validated_language_pairs": getattr(engine, 'validated_language_pairs', [])}
 
     @app.get("/health")
     def health():

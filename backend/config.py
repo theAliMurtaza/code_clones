@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     SEMANTIC_API_URL: str = ""
     SEMANTIC_API_KEY: str = ""
     SEMANTIC_API_TIMEOUT: float = 180.0
+    SEMANTIC_API_TRANSPORT: str = "http"  # http (laptop/VM) or gradio (ZeroGPU)
+    HF_TOKEN: str = ""  # Render secret: authenticate HF Space access and quota
     USE_GPU:          bool = False
     MODEL_CACHE_DIR:  str  = "./model_cache"
     # GraphCodeBERT attention uses substantial memory on CPU. Keep batches small

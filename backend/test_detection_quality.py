@@ -40,6 +40,33 @@ RECURSIVE = '''def fact(n):
     if n <= 1:
         return 1
     return n * fact(n - 1)'''
+MAXIMUM = '''def find_maximum(numbers):
+    if not numbers:
+        return None
+    largest = numbers[0]
+    for value in numbers[1:]:
+        if value > largest:
+            largest = value
+    return largest'''
+FILTER_EVEN = '''def filter_even(numbers):
+    result = []
+    for number in numbers:
+        if number % 2 == 0:
+            result.append(number)
+    return result'''
+FREQUENCY_GET = '''def frequency_map(values):
+    result = {}
+    for value in values:
+        result[value] = result.get(value, 0) + 1
+    return result'''
+DEDUPLICATE = '''def remove_duplicates(items):
+    unique = []
+    for item in items:
+        if item not in unique:
+            unique.append(item)
+    return unique'''
+SCREENSHOT_PAIRS = [(MAXIMUM, FILTER_EVEN), (SUM, FREQUENCY_GET),
+                    (DEDUPLICATE, FREQUENCY)]
 
 
 class HighScoreEngine:
@@ -52,7 +79,7 @@ class HighScoreEngine:
 
 class QualityTests(unittest.TestCase):
     def test_reported_false_positives_rejected_in_all_upload_layouts(self):
-        for a, b in [(FREQUENCY, SUM), (TOTAL, FACTORIAL)]:
+        for a, b in [(FREQUENCY, SUM), (TOTAL, FACTORIAL), *SCREENSHOT_PAIRS]:
             layouts = [[UploadedFile('single.py', a + '\n\n' + b)],
                        [UploadedFile('a.py', a), UploadedFile('b.py', b)],
                        [UploadedFile('folder/a.py', a), UploadedFile('folder/nested/b.py', b)]]
@@ -100,14 +127,57 @@ class QualityTests(unittest.TestCase):
             with self.subTest(code=code), patch('builtins.open', side_effect=AssertionError('host access')):
                 self.assertIsNone(probe(code))
 
-    def test_unknown_is_not_claimed_verified(self):
+    def test_unknown_is_withheld_even_with_perfect_model_score(self):
         self.assertEqual(compare_probes(None, probe(TOTAL)).status, 'inconclusive')
         self.assertEqual(compare_probes(probe('def f(a, b):\n    return a + b'),
                                         probe(TOTAL)).status, 'inconclusive')
         result = run_detection([UploadedFile('a.py', 'print("hello")'),
                                 UploadedFile('b.java', 'System.out.println("hello");')],
                                0.5, HighScoreEngine())
-        self.assertIn('behavior unverified', result.clone_pairs[0].description)
+        self.assertEqual(result.clone_pairs, [])
+        self.assertEqual(result.behavioral_inconclusive, 1)
+
+    def test_screenshot_functions_produce_counterexamples(self):
+        for a, b in SCREENSHOT_PAIRS:
+            with self.subTest(functions=(a.splitlines()[0], b.splitlines()[0])):
+                self.assertEqual(compare_probes(probe(a), probe(b)).status, 'different')
+
+    def test_supported_methods_retain_real_semantic_matches(self):
+        for a, b in [(FILTER_EVEN, 'def even(xs):\n    return [x for x in xs if x % 2 == 0]'),
+                     (FREQUENCY, FREQUENCY_GET)]:
+            with self.subTest(code=a):
+                result = run_detection([UploadedFile('a.py', a), UploadedFile('b.py', b)],
+                                       .5, HighScoreEngine())
+                pair, = result.clone_pairs
+                self.assertEqual(pair.clone_type, 'Type-4')
+                self.assertIn('samples agree', pair.description)
+
+    def test_method_access_is_restricted_and_bounded(self):
+        unsupported = [
+            'def f(xs):\n    return xs.append',
+            'def f(xs):\n    return xs.__class__',
+            'def f(xs):\n    return xs.clear()',
+            'def f(xs):\n    out = []\n    out.append(out)\n    return out',
+            'def f(xs):\n    out = []\n    for i in range(64):\n        out.append(i)\n    out.append(65)\n    return out',
+        ]
+        for code in unsupported:
+            with self.subTest(code=code):
+                self.assertIsNone(probe(code))
+        # append's return value, get's default, and mutation are observable.
+        self.assertEqual(compare_probes(probe('def f(xs):\n    return xs.append(1)'),
+                                        probe('def g(xs):\n    return None')).status, 'different')
+        self.assertEqual(compare_probes(probe('def f(xs):\n    d = {}\n    return d.get(0, xs)'),
+                                        probe('def g(xs):\n    return xs')).status, 'consistent')
+
+    def test_insufficient_or_constant_evidence_is_withheld(self):
+        from behavior_check import Evidence
+        files = [UploadedFile('a.py', TOTAL), UploadedFile('b.py', 'def f(xs):\n    return sum(xs)')]
+        for evidence in [Evidence('consistent', 3, diverse_outputs=3),
+                         Evidence('consistent', 10, diverse_outputs=1), Evidence('inconclusive')]:
+            with self.subTest(evidence=evidence), patch('detector.compare_probes', return_value=evidence):
+                result = run_detection(files, .5, HighScoreEngine())
+                self.assertEqual(result.clone_pairs, [])
+                self.assertEqual(result.behavioral_inconclusive, 1)
 
     def test_near_miss_score_does_not_depend_on_upload_order(self):
         a, b = ['ID_0', '+', 'ID_1', '*', '1'], ['ID_1', '*', '1', '+', 'ID_0']

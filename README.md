@@ -45,13 +45,16 @@ scripts, and code outside functions are included; long units use overlapping
 operators and Python block structure. Near-miss matches require at least 75%
 structural/token similarity and the selected threshold.
 
-Type-4 semantic analysis uses the real GraphCodeBERT model even without fine-tuned
-weights. Every pair other than exact/renamed clones is checked without a lexical
-pre-filter. With the base model, Type-4 **candidates** require cosine similarity
-of at least `max(selected threshold, TYPE4_EMBEDDING_SIM)` (default 0.85). This is
-an uncalibrated heuristic, not a probability or proof of equivalent behavior.
-Fine-tuned weights at `backend/saved_models/model.bin` enable pairwise classifier
-scoring instead, with `TYPE4_SEM_SIM` (default 0.50) as its minimum cutoff.
+Type-4 semantic analysis uses GraphCodeBERT scores plus evidence checks. Base
+embeddings alone cannot produce a result: candidates need diverse agreeing
+bounded Python samples and the configured/user score threshold. Unsupported
+semantic comparisons are withheld, so valid clones can be missed.
+
+A separately trained pairwise head can score its evaluated language pairs using
+a validation-selected threshold. Weights require matching evaluation metadata;
+an unvalidated checkpoint cannot activate classifier mode. Observed behavioral
+counterexamples always reject a candidate. See [training details](backend/TRAINING.md).
+Neither route proves equivalence or promises 100% accuracy.
 Types 1–3 are retained; Type-4 results appear first.
 
 The result page records the model mode, semantic comparisons performed, and
@@ -64,6 +67,8 @@ see [the Oracle Always Free deployment guide](backend/deploy/README.md).
 If Oracle has no capacity, use [your Windows laptop as the model server](backend/deploy/LAPTOP-SETUP.md).
 The launcher supplies an authenticated temporary HTTPS endpoint for Render;
 keep the laptop awake during analyses and update Render's URL after each restart.
+For an eligible Hugging Face account, use [the ZeroGPU Space setup guide](backend/deploy/HUGGINGFACE-ZEROGPU.md)
+to move model inference off the laptop and use a stable Gradio API URL.
 Tune thresholds and measure precision/recall on representative labeled Type-4
 positives and hard negatives; these heuristics are not an accuracy guarantee.
 

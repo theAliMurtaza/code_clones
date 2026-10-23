@@ -1,224 +1,199 @@
+"""Train a symmetric pairwise head on real frozen GraphCodeBERT CLS features.
+
+CPU-friendly pilot; the encoder is NOT fine-tuned. Uses production preprocessing
+and a locally running authenticated base-model service. The trained candidate is
+never automatically installed as the live model. See TRAINING.md.
 """
-train.py
-Fine-tune GraphCodeBERT on BigCloneBench for highest Type-4 accuracy.
-
-This is optional — the base model (microsoft/graphcodebert-base) works
-without fine-tuning.  Fine-tuned weights push F1 from ~0.85 to ~0.94.
-
-Usage:
-    # 1. Download BigCloneBench dataset
-    #    https://github.com/clonebench/BigCloneBench
-    #    Place train.jsonl / valid.jsonl / test.jsonl in data/
-
-    # 2. Run fine-tuning (GPU strongly recommended)
-    python train.py \
-        --data_dir   data/ \
-        --output_dir saved_models/ \
-        --epochs     2 \
-        --batch_size 16
-
-    # 3. The fine-tuned weights are saved to saved_models/model.bin
-    #    The engine auto-loads them on next startup.
-
-BigCloneBench JSONL format (one line per clone pair):
-    {"label": 1, "func1": "public void foo() {...}", "func2": "void bar(){...}"}
-"""
-
-from __future__ import annotations
 import argparse
+import hashlib
 import json
-import logging
-import os
-import sys
+import random
 import time
+from collections import Counter
 from pathlib import Path
-
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader, RandomSampler, SequentialSampler
-from transformers import (
-    RobertaTokenizer, RobertaConfig,
-    RobertaForSequenceClassification,
-    AdamW, get_linear_schedule_with_warmup,
-)
-
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
-from graphcodebert.model   import Model
-from graphcodebert.engine  import GraphCodeBERTEngine, _DummyArgs, MAX_SEQ_LEN
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-MODEL_NAME = "microsoft/graphcodebert-base"
+from transformers import RobertaConfig
+from graphcodebert.engine import GraphCodeBERTEngine, MODEL_NAME
+from graphcodebert.model import RobertaClassificationHead
+from graphcodebert.training_artifact import FORMAT, file_hash
+from training_data import (read_archive, select_functions, induced_pairs,
+                           metrics, select_threshold, serving_gate)
+from deploy.laptop_model import api, LOCAL_URL, RUNTIME
 
 
-# ── Dataset ────────────────────────────────────────────────────────────
-class CloneDataset(Dataset):
-    def __init__(self, jsonl_path: str, engine: GraphCodeBERTEngine):
-        self.examples = []
-        self.engine   = engine
-        logger.info(f"Loading {jsonl_path}...")
-        with open(jsonl_path) as f:
-            for i, line in enumerate(f):
-                item = json.loads(line.strip())
-                self.examples.append({
-                    "label": int(item["label"]),
-                    "func1": item.get("func1", item.get("code1", "")),
-                    "func2": item.get("func2", item.get("code2", "")),
-                    "lang1": item.get("lang1", "java"),
-                    "lang2": item.get("lang2", "java"),
-                })
-                if (i + 1) % 10000 == 0:
-                    logger.info(f"  Loaded {i+1} examples")
-        logger.info(f"Dataset size: {len(self.examples)}")
-
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, idx):
-        ex  = self.examples[idx]
-        enc1 = self.engine._encode_fragment(ex["func1"], ex.get("lang1", "java"))
-        enc2 = self.engine._encode_fragment(ex["func2"], ex.get("lang2", "java"))
-        mask1 = self.engine._build_attn_mask(enc1)
-        mask2 = self.engine._build_attn_mask(enc2)
-        return (
-            torch.tensor(enc1["input_ids"],    dtype=torch.long),
-            torch.tensor(enc1["position_idx"], dtype=torch.long),
-            torch.tensor(mask1,                dtype=torch.bool),
-            torch.tensor(enc2["input_ids"],    dtype=torch.long),
-            torch.tensor(enc2["position_idx"], dtype=torch.long),
-            torch.tensor(mask2,                dtype=torch.bool),
-            torch.tensor(ex["label"],          dtype=torch.long),
-        )
+def write_json(path, value):
+    Path(path).write_text(json.dumps(value, indent=2) + '\n', encoding='utf-8')
 
 
-# ── Evaluation ────────────────────────────────────────────────────────
-def evaluate(model, loader, device):
-    model.eval()
-    preds, labels = [], []
+def embeddings(functions, selected, output, encoder_process='in-process'):
+    preprocessor = GraphCodeBERTEngine.for_preprocessing()
+    encoder = None
+    if encoder_process == 'local-service':
+        key = (RUNTIME / 'model-key.txt').read_text(encoding='utf-8').strip()
+        info = api(LOCAL_URL, '/info', key, timeout=15)
+        if info.get('protocol') != 1 or info.get('mode') != 'embedding':
+            raise ValueError('Start the base laptop model before extracting training features')
+    else:
+        from config import get_settings
+        get_settings().DETECTION_ENGINE = 'full'
+        get_settings().BATCH_SIZE = 1
+        encoder = GraphCodeBERTEngine(device='cpu', saved_model_path='')
+        if not encoder.supports_semantics:
+            raise RuntimeError('Base GraphCodeBERT could not load for training')
+    cache = output / 'features'
+    cache.mkdir()
+    vectors, excluded = {}, {}
+    ids = list(dict.fromkeys(i for values in selected.values() for i in values))
+    for index, identifier in enumerate(ids):
+        code = functions[identifier]
+        try:
+            preprocessor._encode_fragment(code, 'java')
+        except (ValueError, RuntimeError) as exc:
+            excluded[identifier] = str(exc)
+            continue
+        if encoder is None:
+            response = api(LOCAL_URL, '/embed', key,
+                           {'fragments': [{'code': code, 'language': 'java'}]}, timeout=180)
+            vector = np.asarray(response.get('vectors'), dtype=np.float32)
+        else:
+            vector = encoder.embed_batch([code], ['java'])
+        if vector.shape != (1, 768) or not np.all(np.isfinite(vector)) or np.linalg.norm(vector) <= 1e-9:
+            raise ValueError('Invalid model vector; training stopped')
+        vectors[identifier] = vector[0]
+        np.save(cache / (hashlib.sha256(identifier.encode()).hexdigest() + '.npy'), vector[0])
+        if (index + 1) % 10 == 0:
+            print(f'Encoded {index+1}/{len(ids)} functions; usable={len(vectors)}', flush=True)
+    return vectors, excluded
+
+
+def score(head, pairs, vectors, batch_size):
+    head.eval()
+    scores = []
     with torch.no_grad():
-        for batch in loader:
-            ids1, pos1, msk1, ids2, pos2, msk2, lbl = [b.to(device) for b in batch]
-            probs = model(ids1, pos1, msk1, ids2, pos2, msk2)
-            preds.extend(probs[:, 1].cpu().numpy().tolist())
-            labels.extend(lbl.cpu().numpy().tolist())
-
-    preds_bin = [1 if p >= 0.5 else 0 for p in preds]
-    tp = sum(p == 1 and l == 1 for p, l in zip(preds_bin, labels))
-    fp = sum(p == 1 and l == 0 for p, l in zip(preds_bin, labels))
-    fn = sum(p == 0 and l == 1 for p, l in zip(preds_bin, labels))
-
-    precision = tp / (tp + fp + 1e-9)
-    recall    = tp / (tp + fn + 1e-9)
-    f1        = 2 * precision * recall / (precision + recall + 1e-9)
-    return {"precision": precision, "recall": recall, "f1": f1}
+        for offset in range(0, len(pairs), batch_size):
+            batch = pairs[offset:offset+batch_size]
+            a = torch.tensor(np.array([vectors[i] for i, _, _ in batch]))
+            b = torch.tensor(np.array([vectors[j] for _, j, _ in batch]))
+            scores.extend(torch.softmax(head.forward_vectors(a, b), dim=-1)[:, 1].tolist())
+    return scores
 
 
-# ── Training loop ─────────────────────────────────────────────────────
-def train(args):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    logger.info(f"Device: {device.upper()}")
-
-    # Load engine (for encoding, parsers, etc.)
-    engine = GraphCodeBERTEngine(device=device)
-
-    # Build model
-    config    = RobertaConfig.from_pretrained(MODEL_NAME)
-    tokenizer = RobertaTokenizer.from_pretrained(MODEL_NAME)
-    encoder   = RobertaForSequenceClassification.from_pretrained(
-        MODEL_NAME, num_labels=2
-    )
-    model = Model(encoder, config, tokenizer, args=_DummyArgs())
-    model.to(device)
-
-    # Load existing weights if resuming
-    ckpt = os.path.join(args.output_dir, "model.bin")
-    if os.path.isfile(ckpt):
-        model.load_state_dict(torch.load(ckpt, map_location=device), strict=False)
-        logger.info(f"Resumed from {ckpt}")
-
-    # Datasets
-    train_dataset = CloneDataset(os.path.join(args.data_dir, "train.jsonl"), engine)
-    valid_dataset = CloneDataset(os.path.join(args.data_dir, "valid.jsonl"), engine)
-
-    train_loader = DataLoader(
-        train_dataset,
-        sampler    = RandomSampler(train_dataset),
-        batch_size = args.batch_size,
-        num_workers= 2,
-    )
-    valid_loader = DataLoader(
-        valid_dataset,
-        sampler    = SequentialSampler(valid_dataset),
-        batch_size = args.batch_size * 2,
-        num_workers= 2,
-    )
-
-    # Optimizer & scheduler
-    no_decay = ["bias", "LayerNorm.weight"]
-    params   = [
-        {"params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], "weight_decay": 0.01},
-        {"params": [p for n, p in model.named_parameters() if     any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-    ]
-    optimizer = AdamW(params, lr=args.lr)
-    total_steps   = len(train_loader) * args.epochs
-    warmup_steps  = int(0.1 * total_steps)
-    scheduler     = get_linear_schedule_with_warmup(optimizer, warmup_steps, total_steps)
-
-    # Train
-    best_f1 = 0.0
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    for epoch in range(1, args.epochs + 1):
-        model.train()
-        total_loss = 0.0
-        t0         = time.time()
-
-        for step, batch in enumerate(train_loader):
-            ids1, pos1, msk1, ids2, pos2, msk2, lbl = [b.to(device) for b in batch]
-            loss, _ = model(ids1, pos1, msk1, ids2, pos2, msk2, lbl)
-
+def fit(head, pairs, vectors, args, output):
+    optimizer = torch.optim.AdamW(head.parameters(), lr=args.lr, weight_decay=.01)
+    train, valid = pairs['train'], pairs['valid']
+    valid_labels = [r[2] for r in valid]
+    best, history = None, []
+    for epoch in range(args.epochs):
+        head.train()
+        order = list(range(len(train)))
+        random.Random(args.seed + epoch).shuffle(order)
+        loss_sum = 0.
+        for offset in range(0, len(order), args.batch_size):
+            batch = [train[i] for i in order[offset:offset+args.batch_size]]
+            a = torch.tensor(np.array([vectors[i] for i, _, _ in batch]))
+            b = torch.tensor(np.array([vectors[j] for _, j, _ in batch]))
+            labels = torch.tensor([label for _, _, label in batch], dtype=torch.long)
+            optimizer.zero_grad(set_to_none=True)
+            loss = torch.nn.functional.cross_entropy(head.forward_vectors(a, b), labels)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(head.parameters(), 1.)
             optimizer.step()
-            scheduler.step()
-            optimizer.zero_grad()
-            total_loss += loss.item()
-
-            if (step + 1) % 100 == 0:
-                logger.info(
-                    f"Epoch {epoch} step {step+1}/{len(train_loader)} "
-                    f"loss={total_loss/(step+1):.4f} "
-                    f"elapsed={time.time()-t0:.0f}s"
-                )
-
-        # Validate
-        metrics = evaluate(model, valid_loader, device)
-        logger.info(
-            f"Epoch {epoch} — P={metrics['precision']:.4f} "
-            f"R={metrics['recall']:.4f} F1={metrics['f1']:.4f}"
-        )
-
-        if metrics["f1"] > best_f1:
-            best_f1 = metrics["f1"]
-            torch.save(model.state_dict(), ckpt)
-            logger.info(f"  Saved new best model (F1={best_f1:.4f}) → {ckpt}")
-
-    logger.info(f"Training done. Best F1: {best_f1:.4f}")
-    logger.info(f"Model saved to {ckpt} — will be auto-loaded by GraphCodeBERTEngine.")
+            loss_sum += loss.item() * len(batch)
+        predictions = score(head, valid, vectors, args.batch_size)
+        threshold, measured = select_threshold(valid_labels, predictions, args.target_precision, args.min_recall)
+        fallback = metrics(valid_labels, predictions, .5)
+        rank = (threshold is not None, measured['recall'], measured['precision'], fallback['f1'])
+        if best is None or rank > best:
+            best = rank
+            torch.save(head.state_dict(), output / 'model.bin')
+            write_json(output / 'selection.json', {'epoch': epoch+1, 'threshold': threshold,
+                                                   'validation': measured})
+        row = {'epoch': epoch+1, 'train_loss': loss_sum/len(train),
+               'threshold': threshold, 'validation': measured}
+        history.append(row)
+        print(json.dumps(row), flush=True)
+    write_json(output / 'history.json', history)
 
 
-# ── Entry point ────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fine-tune GraphCodeBERT on BigCloneBench")
-    parser.add_argument("--data_dir",   default="data/",          help="Directory with train/valid/test.jsonl")
-    parser.add_argument("--output_dir", default="saved_models/",  help="Where to save model.bin")
-    parser.add_argument("--epochs",     type=int,   default=2,    help="Number of training epochs")
-    parser.add_argument("--batch_size", type=int,   default=16,   help="Batch size per GPU/CPU")
-    parser.add_argument("--lr",         type=float, default=2e-5, help="Learning rate")
-    args = parser.parse_args()
+def train(args):
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.set_num_threads(args.threads)
+    output = Path(args.output_dir).resolve()
+    if output.exists():
+        raise ValueError('Use a new output directory; existing experiments are preserved')
+    if output == Path(__file__).resolve().parent / 'saved_models':
+        raise ValueError('Train in training_runs, not the live saved_models directory')
+    output.mkdir(parents=True)
+    started = time.time()
+    functions, splits, archive_audit = read_archive(args.dataset_zip)
+    selected, duplicates = select_functions(functions, splits,
+        {'train': args.train_functions, 'valid': args.eval_functions, 'test': args.eval_functions}, args.seed)
+    write_json(output / 'audit.json', {'archive_sha256': file_hash(args.dataset_zip),
+        'archive': archive_audit, 'sample_function_ids': selected, 'duplicate_exclusions': duplicates,
+        'scope': 'Java BigCloneBench binary clone labels; no Python accuracy claim', 'seed': args.seed})
+    print('Archive audited. Extracting production GraphCodeBERT features.', flush=True)
+    vectors, excluded = embeddings(functions, selected, output, args.encoder_process)
+    write_json(output / 'encoding_exclusions.json', excluded)
+    pairs = induced_pairs(splits, selected, vectors)
+    del splits
+    write_json(output / 'pairs.json', pairs)
+    counts = {split: dict(Counter(str(row[2]) for row in rows)) for split, rows in pairs.items()}
+    print('Eligible pair counts: ' + json.dumps(counts), flush=True)
+    head = RobertaClassificationHead(RobertaConfig(hidden_size=768, hidden_dropout_prob=.1))
+    fit(head, pairs, vectors, args, output)
+    selection = json.loads((output / 'selection.json').read_text())
+    head.load_state_dict(torch.load(output / 'model.bin', map_location='cpu', weights_only=True), strict=True)
+    threshold = selection['threshold']
+    # Test is evaluated once after epoch and threshold selection finish.
+    test_scores = score(head, pairs['test'], vectors, args.batch_size)
+    test_metrics = metrics([r[2] for r in pairs['test']], test_scores,
+                           threshold if threshold is not None else 1.000001)
+    reasons = serving_gate(selection['validation'], test_metrics, args.target_precision, args.min_recall)
+    if threshold is None:
+        reasons.append('No validation operating point met precision/recall targets')
+    report = {'format': FORMAT, 'encoder': MODEL_NAME, 'training_mode': 'frozen_encoder_trained_pair_head',
+        'threshold': threshold, 'selected_epoch': selection['epoch'],
+        'validation': selection['validation'], 'test': test_metrics,
+        'target_precision': args.target_precision, 'min_recall': args.min_recall,
+        'eligible_for_serving': not reasons, 'gate_failures': reasons,
+        'validated_language_pairs': ['java:java'] if not reasons else [],
+        'weights_sha256': file_hash(output / 'model.bin'), 'pair_counts': counts,
+        'encoded_functions': len(vectors), 'excluded_functions': len(excluded),
+        'elapsed_seconds': round(time.time()-started, 1),
+        'limitations': 'Pilot on sampled Java benchmark functions, not four-way or Python accuracy. '
+                       'Clone labels do not prove universal behavioral equivalence. '
+                       'Do not reuse this test set for tuning and call it untouched.'}
+    write_json(output / 'model.json', report)
+    write_json(output / 'test_predictions.json', [
+        {'a': a, 'b': b, 'label': label, 'score': score_value}
+        for (a, b, label), score_value in zip(pairs['test'], test_scores)])
+    print(json.dumps(report, indent=2), flush=True)
+    print('Candidate saved separately. The live laptop model has not been changed.', flush=True)
+
+
+def parser():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--dataset_zip', required=True)
+    p.add_argument('--output_dir', required=True)
+    p.add_argument('--train_functions', type=int, default=256, help='0 uses all; default is a CPU pilot')
+    p.add_argument('--eval_functions', type=int, default=128)
+    p.add_argument('--epochs', type=int, default=20)
+    p.add_argument('--batch_size', type=int, default=32)
+    p.add_argument('--lr', type=float, default=1e-4)
+    p.add_argument('--seed', type=int, default=42)
+    p.add_argument('--threads', type=int, default=2)
+    p.add_argument('--encoder_process', choices=['in-process', 'local-service'], default='in-process')
+    p.add_argument('--target_precision', type=float, default=.95)
+    p.add_argument('--min_recall', type=float, default=.50)
+    return p
+
+
+if __name__ == '__main__':
+    args = parser().parse_args()
+    if (min(args.train_functions, args.eval_functions) < 0 or min(args.epochs, args.batch_size, args.threads) < 1
+            or args.lr <= 0 or not 0 < args.target_precision <= 1 or not 0 < args.min_recall <= 1):
+        raise SystemExit('Invalid training parameters')
     train(args)

@@ -15,6 +15,11 @@ backend/.env
 backend/deploy/.env
 backend/deploy/.laptop-model/
 *.sqlite3
+backend/training_runs/
+backend/saved_models/
+backend/data/
+backend/.venv-hf/
+backend/deploy/.hf-space*/
 
 # Editor and OS files
 .DS_Store

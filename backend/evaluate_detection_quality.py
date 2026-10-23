@@ -12,7 +12,8 @@ from config import get_settings
 from classifier import code_tokens, parameterize_tokens
 from detector import UploadedFile, run_detection
 from graphcodebert.engine import GraphCodeBERTEngine
-from test_detection_quality import TOTAL, SUM, FREQUENCY, FACTORIAL, RECURSIVE
+from test_detection_quality import (TOTAL, SUM, FREQUENCY, FACTORIAL, RECURSIVE,
+                                    MAXIMUM, FILTER_EVEN, FREQUENCY_GET, DEDUPLICATE)
 
 
 CASES = [
@@ -29,6 +30,12 @@ CASES = [
     ('frequency_vs_factorial', FREQUENCY, FACTORIAL, None),
     ('sum_vs_greeting', SUM, 'def greet(name):\n    return "Hello " + name', None),
     ('factorial_vs_greeting', RECURSIVE, 'def greet(name):\n    return "Hello " + name', None),
+    ('maximum_vs_even_filter', MAXIMUM, FILTER_EVEN, None),
+    ('sum_vs_frequency_get', SUM, FREQUENCY_GET, None),
+    ('deduplicate_vs_frequency', DEDUPLICATE, FREQUENCY, None),
+    ('even_loop_vs_comprehension', FILTER_EVEN,
+     'def even(xs):\n    return [x for x in xs if x % 2 == 0]', 'Type-4'),
+    ('frequency_branches_vs_get', FREQUENCY, FREQUENCY_GET, 'Type-4'),
 ]
 
 
@@ -66,7 +73,8 @@ def main():
                      'behavioral_inconclusive': result.behavioral_inconclusive,
                      'behavioral_consistent': result.behavioral_consistent})
         print(json.dumps(rows[-1]), flush=True)
-    report = {'scope': '13 hand-authored regression examples; not a representative accuracy benchmark',
+    report = {'scope': f'{len(CASES)} hand-authored regression examples; not a representative accuracy benchmark',
+              'detector_revision': result.analysis_info['detector_revision'],
               'weights': 'microsoft/graphcodebert-base, no fine-tuned checkpoint',
               'cases': rows,
               'previous_exact_labels': sum(r['previous'] == r['expected'] for r in rows),
