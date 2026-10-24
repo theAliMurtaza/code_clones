@@ -1,3 +1,4 @@
+import { beginActivity } from './activity'
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 export const BASE_URL = BASE
 
@@ -8,7 +9,11 @@ async function req(path, options = {}, token = null) {
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const { timeout = 60000, ...fetchOptions } = options
+  const { timeout = 60000, silent = false, activity, ...fetchOptions } = options
+  const finish = silent ? () => {} : beginActivity(activity || (
+    path.includes('/auth/') ? 'Signing you in…' :
+    path.includes('/detect') ? 'Preparing your analysis…' :
+    options.method === 'DELETE' ? 'Deleting analysis…' : 'Loading your workspace…'))
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeout)
 
@@ -29,15 +34,21 @@ async function req(path, options = {}, token = null) {
     }
     throw err
   } finally {
+    finish()
     clearTimeout(id)
   }
 }
 
 export const api = {
-  health: (options = {}) => req('/health', { timeout: 10000, ...options }),
+  health: (options = {}) => req('/health', { timeout: 10000, silent: true, ...options }),
+  googleConfig: () => req('/api/auth/google/config', { silent: true }),
+  googleLogin: (credential, nonce) => req('/api/auth/google', {
+    method: 'POST', body: JSON.stringify({ credential, nonce }),
+  }),
   register: (name, email, password) =>
     req('/api/auth/register', {
       method: 'POST',
+      activity: 'Creating your account…',
       body: JSON.stringify({ name, email, password }),
     }),
   login: (email, password) =>
@@ -64,7 +75,7 @@ export const api = {
       body: JSON.stringify({ folder_path: folderPath, threshold: Number(threshold) }),
     }, token),
   jobs:      (token)        => req('/api/jobs',            {}, token),
-  job:       (id, token)    => req(`/api/jobs/${id}`,      {}, token),
+  job:       (id, token, options = {}) => req(`/api/jobs/${id}`, options, token),
   source: (id, path, token) => req(`/api/jobs/${id}/source?path=${encodeURIComponent(path)}`, {}, token),
   deleteJob: (id, token)    => req(`/api/jobs/${id}`, { method: 'DELETE' }, token),
   stats: (token) => req('/api/stats', {}, token),
@@ -78,7 +89,7 @@ export function pollJob(jobId, token, { onProgress, onDone, onError, intervalMs 
   const tick = async () => {
     if (cancelled) return
     try {
-      const data = await api.job(jobId, token)
+      const data = await api.job(jobId, token, { silent: true })
       consecutiveErrors = 0
       onProgress?.(data)
       if (data.status === 'done') {

@@ -5,7 +5,7 @@ import { Badge, Spinner, EmptyState } from '../components/UI'
 import { STATUS_BADGE } from '../utils/data'
 
 export default function Account() {
-  const { userName, getToken, logout, setPage, setJobResults, setCurrentJobId, toast, recentJobs, loadingDash, refreshDashboard, isAuthed, openAuthModal } = useApp()
+  const { userName, getToken, logout, setPage, setJobResults, setJobProgress, setCurrentJobId, toast, recentJobs, loadingDash, refreshDashboard, isAuthed, openAuthModal } = useApp()
   const [deleting, setDeleting] = useState(null)
 
   useEffect(() => { 
@@ -39,7 +39,8 @@ export default function Account() {
       const data = await api.job(jobId, token)
       setJobResults(data)
       setCurrentJobId(jobId)
-      setPage('results')
+      setJobProgress(data)
+      setPage(['queued', 'running'].includes(data.status) ? 'detection' : 'results')
     } catch (err) {
       toast('Could not load job', err.message, 'error')
     }

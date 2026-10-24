@@ -18,6 +18,13 @@ export function AppProvider({ children }) {
   const [loadingDash,   setLoadingDash]   = useState(false)
   const [toasts,        setToasts]        = useState([])
   const toastId = useRef(0)
+  const [activities, setActivities] = useState([])
+  useEffect(() => {
+    const update = ({ detail }) => setActivities(items => detail.active
+      ? [...items, detail] : items.filter(item => item.id !== detail.id))
+    window.addEventListener('clonescope:activity', update)
+    return () => window.removeEventListener('clonescope:activity', update)
+  }, [])
 
   // Auth modal control
   const [authModalOpen, setAuthModalOpen] = useState(false)
@@ -33,7 +40,7 @@ export function AppProvider({ children }) {
 
   const toast = useCallback((msg, sub='', type='success') => {
     const id = ++toastId.current
-    setToasts(p => [...p, { id, msg, sub, type }])
+    setToasts(p => [...p, { id, msg, sub, type }].slice(-2))
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 5000)
   }, [])
 
@@ -59,6 +66,7 @@ export function AppProvider({ children }) {
   }, [])
 
   const logout = useCallback(() => {
+    window.google?.accounts?.id?.disableAutoSelect()
     localStorage.removeItem('cs_token')
     localStorage.removeItem('cs_user')
     setToken('')
@@ -150,7 +158,7 @@ export function AppProvider({ children }) {
       jobProgress, setJobProgress,
       jobResults, setJobResults,
       recentJobs, dashStats, loadingDash, refreshDashboard,
-      toasts, toast, removeToast,
+      toasts, toast, removeToast, activities,
       // Auth modal
       authModalOpen, authModalMode, openAuthModal, closeAuthModal, authPendingAction,
       // Backend status & cold start

@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext'
 import { api } from '../utils/api'
 import { Spinner } from '../components/UI'
 import { SUPPORTED_EXTS } from '../utils/data'
+import { beginActivity } from '../utils/activity'
 
 // Recursively traverse directory entries from drag-and-drop
 async function getFilesFromDataTransfer(items) {
@@ -160,6 +161,7 @@ export default function Upload() {
   const onDrop = useCallback(async (e) => {
     e.preventDefault()
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      const finish = beginActivity('Reading your folder…')
       try {
         const filesWithPaths = await getFilesFromDataTransfer(e.dataTransfer.items)
         if (filesWithPaths.length > 0) {
@@ -169,6 +171,8 @@ export default function Upload() {
       } catch (err) {
         toast('Folder could not be read', err.message || 'Please select the folder again.', 'error')
         return
+      } finally {
+        finish()
       }
     }
     if (e.dataTransfer.files?.length > 0) {
@@ -199,7 +203,6 @@ export default function Upload() {
 
     setIsSubmitting(true)
     try {
-      toast('Submitting analysis…', `${valid.length} file(s) queued with directory paths`)
       const rawFiles = valid.map(f => f.raw)
       const filePaths = valid.map(f => f.path || f.name)
       const res = await api.detect(rawFiles, threshold, token, filePaths)
@@ -242,7 +245,6 @@ export default function Upload() {
 
     setIsSubmitting(true)
     try {
-      toast('Scanning folder…', `Extracting coding files from ${trimmed}`)
       const res = await api.detectFolder(trimmed, threshold, token)
       setCurrentJobId(res.job_id)
       setJobProgress(null)

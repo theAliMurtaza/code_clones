@@ -2,6 +2,7 @@ import { AppProvider, useApp } from './context/AppContext'
 import Sidebar from './components/Sidebar'
 import { TopBar, Toasts } from './components/TopBar'
 import AuthModal from './components/AuthModal'
+import ActivityOverlay from './components/ActivityOverlay'
 import BackendStatusBanner from './components/BackendStatusBanner'
 import Dashboard from './pages/Dashboard'
 import Upload    from './pages/Upload'
@@ -18,14 +19,17 @@ function Layout() {
   const Page = PAGES[page] || Dashboard
 
   return (
-    <div className="flex min-h-screen bg-bg">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        <BackendStatusBanner />
-        <TopBar />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8"><Page key={page} /></main>
+    <div className="workspace-shell flex min-h-screen bg-bg">
+      <div className="flex w-full min-w-0" style={{ display: authModalOpen ? 'none' : undefined }}>
+        <Sidebar />
+        <div className="flex-1 flex flex-col min-w-0">
+          <BackendStatusBanner />
+          <TopBar />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8"><Page key={page} /></main>
+        </div>
       </div>
       <Toasts />
+      <ActivityOverlay />
       <AuthModal
         isOpen={authModalOpen}
         initialMode={authModalMode}

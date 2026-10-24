@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext'
 import { Badge, EmptyState } from '../components/UI'
 import CodeViewer from '../components/CodeViewer'
 import FullSourceDialog from '../components/FullSourceDialog'
+import AnalysisSummary from '../components/AnalysisSummary'
 import { CLONE_TYPE_META, BADGE_CLASS } from '../utils/data'
 
 const TYPE_FILTERS = ['All', 'Type-1', 'Type-2', 'Type-3', 'Type-4']
@@ -155,8 +156,6 @@ function ClonePairCard({ pair, index, defaultOpen, toast, onViewFull }) {
             <span>{scoreLabel}: <strong style={{ color: meta.color }}>{pct}%</strong></span>
             <span>Token sim: <strong className="text-t2">{pair.token_sim != null ? Math.round(pair.token_sim * 100) + '%' : '—'}</strong></span>
             {pair.cross_language && <span className="text-accent font-semibold">Cross-language detected</span>}
-            {pair.clone_type === 'Type-3' && <span className="basis-full">Structural similarity measures syntax overlap, not equivalent behavior. New analyses weight operators and literal values more than punctuation.</span>}
-            {pair.clone_type === 'Type-4' && <span className="basis-full">Model score is not verified correctness or a measured accuracy percentage. Review both implementations.</span>}
           </div>
         </div>
       )}
@@ -269,43 +268,12 @@ export default function Results() {
 
   return (
     <div className="animate-fadeUp space-y-6 max-w-6xl mx-auto">
-      <div className="card p-4 text-xs space-y-2" role="status">
-        <strong className="text-t1">Clone analysis coverage</strong>
-        <p className="text-t2">
-          {jobResults.analysis_info?.mode === 'classifier'
-            ? 'Fine-tuned GraphCodeBERT classifier used. Type-4 candidates appear first; Types 1–3 are also included.'
-            : jobResults.analysis_info?.mode === 'embedding'
-              ? 'Types 1–3 structural comparisons and GraphCodeBERT semantic analysis are enabled. Type-4 candidates appear first and need review: embedding similarity is not proof of equivalent behavior.'
-              : jobResults.analysis_info?.mode === 'structural'
-                ? 'Type-4 was NOT checked: the semantic model is unavailable or lightweight mode is enabled. These results contain structural Types 1–3 only. Run with the full model to check Type-4.'
-                : jobResults.analysis_info?.mode === 'not_run'
-                  ? 'No eligible pairs of separate code regions were available for comparison.'
-                  : 'This older analysis has no model status. Rerun it to check Type-4 with the updated detector.'}
-        </p>
-        {jobResults.analysis_info?.comparison_scope === 'within_and_across_files' && (
-          <p className="text-t2">Scope: separate code regions within each file and across uploaded files. Overlapping regions are excluded.</p>
-        )}
-        {jobResults.analysis_info?.semantic_threshold != null && (
-          <p className="font-mono text-t3">
-            Semantic pairs checked: {jobResults.analysis_info.semantic_pairs_checked} · Standard minimum score: {Math.round(jobResults.analysis_info.semantic_threshold * 100)}%
-            {jobResults.analysis_info.semantic_corroborated_threshold != null && <> · With diverse agreeing Python checks: {Math.round(jobResults.analysis_info.semantic_corroborated_threshold * 100)}%</>}
-          </p>
-        )}
-        {['weighted-syntax-counterexamples-v1', 'weighted-syntax-counterexamples-v2'].includes(jobResults.analysis_info?.detector_revision) && (
-          <p className="text-t2">Behavior checks rejected {jobResults.analysis_info.behavioral_rejections} semantic candidates. Accepted candidates: {jobResults.analysis_info.behavioral_consistent} agreed on bounded Python samples; {jobResults.analysis_info.behavioral_inconclusive} could not be checked. Sample agreement is not proof of equivalence; Java and unsupported Python require review.</p>
-        )}
-        {jobResults.analysis_info?.semantic_policy === 'requires_diverse_behavioral_agreement' && (
-          <p className="text-t2">Type-4 requires model similarity plus at least five agreeing Python samples with three distinct outputs. Behavior checks rejected {jobResults.analysis_info.behavioral_rejections} candidates; {jobResults.analysis_info.behavioral_inconclusive} candidates were withheld because evidence was insufficient. {jobResults.analysis_info.behavioral_consistent} candidates met these checks. Java and unsupported Python are not confirmed by these checks. Sample agreement is not proof of equivalence, and no reported matches does not prove that the code has no semantic clones.</p>
-        )}
-        {jobResults.analysis_info?.semantic_policy === 'validated_classifier_or_diverse_behavioral_agreement' && (
-          <p className="text-t2">Type-4 requires diverse agreeing Python checks or a trained classifier that passed evaluation for the language pair. Behavior checks rejected {jobResults.analysis_info.behavioral_rejections} candidates and {jobResults.analysis_info.behavioral_inconclusive} were withheld for insufficient evidence. Accepted: {jobResults.analysis_info.behavioral_consistent} with agreeing samples, {jobResults.analysis_info.classifier_supported} using classifier evidence. Neither route proves equivalence, and no reported matches does not rule out semantic clones.</p>
-        )}
-      </div>
+      <AnalysisSummary result={jobResults} />
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         <div className="md:col-span-5 card p-5">
           <div className="card-title mb-3">Files analyzed: {jobResults.files?.length || 0}</div>
-          <p className="text-xs text-t3 mb-3">Detected pairs are grouped by clone type below. A pair is assigned one type; an analysis may not contain every type. Similarity scores are estimates, not measured accuracy.</p>
+          <p className="text-xs text-t3 mb-3">Browse the source files included in this analysis.</p>
           <div className="max-h-40 overflow-auto space-y-2">
             {(jobResults.files || []).map(file => (
               <button key={file} onClick={() => setFullSource({ file })}

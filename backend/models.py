@@ -42,6 +42,12 @@ class User(Base):
 
 
 # ── Analysis Job ──────────────────────────────────────────────────────
+class GoogleIdentity(Base):
+    __tablename__ = "google_identities"
+    subject = Column(String(255), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+
+
 class Job(Base):
     __tablename__ = "jobs"
 

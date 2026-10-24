@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../utils/api'
 import CodeViewer from './CodeViewer'
+import { Spinner } from './UI'
 
 export default function FullSourceDialog({ jobId, file, token, cloneLines = [], cloneType, onClose }) {
   const dialog = useRef(null)
@@ -33,7 +34,7 @@ export default function FullSourceDialog({ jobId, file, token, cloneLines = [], 
         {error ? <p role="alert" className="p-6 text-rose">{error}</p>
           : source ? <CodeViewer lines={lines} file={file} lang={source.language}
               cloneLines={cloneLines} cloneType={cloneType} />
-            : <p role="status" className="p-6 text-t3">Loading source code…</p>}
+            : <div role="status" className="h-full flex flex-col items-center justify-center gap-4 text-t2"><Spinner size={28}/><p>Loading source code…</p></div>}
       </div>
     </dialog>
   )

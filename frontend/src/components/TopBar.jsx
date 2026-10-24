@@ -67,16 +67,17 @@ export function Toasts() {
     error:   'border-rose/30    text-rose',
   }
   return (
-    <div className="fixed bottom-5 right-5 flex flex-col gap-2 z-50">
-      {toasts.map(t => (
+    <div className="feedback-stack" aria-live="polite">
+      {toasts.slice(-2).map(t => (
         <div key={t.id}
-          className={`flex items-start gap-3 px-4 py-3 bg-s2 border rounded-xl min-w-[260px] max-w-sm shadow-[0_10px_30px_rgba(0,0,0,.5)] animate-slideIn ${color[t.type] || color.success}`}>
+          role={t.type === 'error' ? 'alert' : 'status'}
+          className={`feedback-card ${color[t.type] || color.success}`}>
           <span className="text-base leading-none mt-0.5 flex-shrink-0">{icon[t.type] || '✓'}</span>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-t1">{t.msg}</div>
-            {t.sub && <div className="text-[10px] text-t2 font-mono mt-0.5">{t.sub}</div>}
+            <div className="text-sm font-semibold text-t1">{t.msg}</div>
+            {t.sub && <div className="text-xs text-t2 mt-1 leading-relaxed break-words">{t.sub}</div>}
           </div>
-          <button onClick={() => removeToast(t.id)} className="text-t3 hover:text-t1 text-lg leading-none flex-shrink-0">×</button>
+          <button aria-label="Dismiss notification" onClick={() => removeToast(t.id)} className="text-t3 hover:text-t1 text-lg leading-none flex-shrink-0">×</button>
         </div>
       ))}
     </div>
