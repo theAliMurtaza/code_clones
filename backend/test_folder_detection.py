@@ -240,8 +240,8 @@ class FolderApiTests(unittest.TestCase):
         main.app.dependency_overrides[main.get_db] = get_db
         main.app.dependency_overrides[main.get_current_user] = lambda: self.user
         self.session_patch = patch.object(main, 'SessionLocal', self.sessions)
-        self.detection_patch = patch.object(main, 'run_detection', side_effect=lambda files, threshold:
-                                            run_detection(files, threshold, engine=StructuralEngine()))
+        self.detection_patch = patch.object(main, 'run_detection', side_effect=lambda files, threshold, **kwargs:
+                                            run_detection(files, threshold, engine=StructuralEngine(), **kwargs))
         self.session_patch.start()
         self.detection_patch.start()
         self.client = TestClient(main.app)

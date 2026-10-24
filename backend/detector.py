@@ -57,6 +57,7 @@ class DetectionResult:
     behavioral_consistent: int = 0
     behavioral_inconclusive: int = 0
     classifier_supported: int = 0
+    skipped_stages: list = field(default_factory=list)
 
     @property
     def analysis_info(self):
@@ -69,18 +70,27 @@ class DetectionResult:
                 "behavioral_rejections": self.behavioral_rejections,
                 "behavioral_consistent": self.behavioral_consistent,
                 "behavioral_inconclusive": self.behavioral_inconclusive,
-                "classifier_supported": self.classifier_supported}
+                "classifier_supported": self.classifier_supported,
+                "progress": {"stage": "complete", "skipped_stages": self.skipped_stages}}
 
 
-def run_detection(files: list, threshold: float = None, engine=None) -> DetectionResult:
+def run_detection(files: list, threshold: float = None, engine=None, on_progress=None) -> DetectionResult:
     threshold = settings.DEFAULT_THRESHOLD if threshold is None else threshold
     result = DetectionResult()
     started = time.perf_counter()
     fragments = []
+    def progress(stage):
+        if on_progress:
+            on_progress({"stage": stage, "total_fragments": result.total_fragments,
+                         "skipped_stages": list(result.skipped_stages)})
+
+    progress("extracting")
     for source in files:
         # An extraction failure must fail the job, not silently report zero clones.
         fragments.extend(extract_fragments(source.content, source.filename))
 
+    result.total_fragments = len(fragments)
+    progress("tokenizing")
     tokens = [code_tokens(f.code, f.language) for f in fragments]
     # Ignore empty/comment-only fragments and isolated closing braces.
     usable = [(f, t) for f, t in zip(fragments, tokens)
@@ -104,9 +114,12 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
                       or fragments[j].end_line < fragments[i].start_line)]
     result.stage1_pairs = len(candidates)
     if not candidates:
+        result.skipped_stages = ["structural", "semantic"]
+        progress("preparing")
         result.runtime_seconds = round(time.perf_counter() - started, 3)
         return result
 
+    progress("structural")
     if engine is None:
         from graphcodebert.engine import get_engine
         engine = get_engine()
@@ -138,6 +151,11 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
             scored[(i, j)] = (ctype, score, tok)
         if ctype is None and semantic_available:
             semantic_candidates.append((i, j))
+
+    if semantic_candidates:
+        progress("semantic")
+    else:
+        result.skipped_stages.append("semantic")
 
     # Probe each Python fragment once. This never executes uploaded Python code;
     # the restricted AST interpreter only manipulates bounded primitive values.
@@ -201,6 +219,7 @@ def run_detection(files: list, threshold: float = None, engine=None) -> Detectio
                 scored[(i, j)] = ("Type-4", float(prob), tok)
                 semantic_evidence[(i, j)] = evidence
 
+    progress("preparing")
     for (i, j), (ctype, score, tok) in scored.items():
         a, b = fragments[i], fragments[j]
         cross = a.language != b.language

@@ -90,6 +90,7 @@ export function pollJob(jobId, token, { onProgress, onDone, onError, intervalMs 
     if (cancelled) return
     try {
       const data = await api.job(jobId, token, { silent: true })
+      if (cancelled) return
       consecutiveErrors = 0
       onProgress?.(data)
       if (data.status === 'done') {
@@ -100,6 +101,7 @@ export function pollJob(jobId, token, { onProgress, onDone, onError, intervalMs 
         timer = setTimeout(tick, intervalMs)
       }
     } catch (err) {
+      if (cancelled) return
       consecutiveErrors++
       // Allow up to 3 consecutive transient network glitches before declaring error
       if (consecutiveErrors >= 3) {

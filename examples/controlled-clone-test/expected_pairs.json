@@ -1,0 +1,82 @@
+{
+  "scope": "Whole-function pairs, most specific clone type only",
+  "expected_pairs": [
+    {
+      "type": "Type-1",
+      "a": {
+        "name": "clean_label",
+        "lines": [
+          1,
+          7
+        ]
+      },
+      "b": {
+        "name": "clean_label",
+        "lines": [
+          10,
+          17
+        ]
+      }
+    },
+    {
+      "type": "Type-2",
+      "a": {
+        "name": "squared_distance",
+        "lines": [
+          20,
+          26
+        ]
+      },
+      "b": {
+        "name": "separation_squared",
+        "lines": [
+          29,
+          35
+        ]
+      }
+    },
+    {
+      "type": "Type-3",
+      "a": {
+        "name": "make_receipt",
+        "lines": [
+          38,
+          49
+        ]
+      },
+      "b": {
+        "name": "make_receipt_with_fee",
+        "lines": [
+          52,
+          64
+        ]
+      }
+    },
+    {
+      "type": "Type-4",
+      "a": {
+        "name": "triangular_by_loop",
+        "lines": [
+          67,
+          75
+        ]
+      },
+      "b": {
+        "name": "triangular_by_formula",
+        "lines": [
+          78,
+          84
+        ]
+      }
+    }
+  ],
+  "expected_total": 4,
+  "functions": 10,
+  "possible_unordered_pairs": 45,
+  "negative_controls": [
+    "find_maximum",
+    "filter_even"
+  ],
+  "type4_domain": "Integer inputs; nonpositive integers return 0",
+  "note": "Curated labels for this diagnostic fixture, not a universal clone-count guarantee or a model accuracy measurement."
+}

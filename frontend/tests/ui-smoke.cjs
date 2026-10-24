@@ -47,7 +47,30 @@ const path = require('node:path')
       path.resolve(__dirname, '../../examples/all-types-demo/folder/original.py'),
       path.resolve(__dirname, '../../examples/all-types-demo/folder/nested/exact.py'),
     ])
+    // Slow, controlled API milestones let us inspect stages that a small real
+    // analysis can complete between two polls. The final result stays real.
+    const stages = ['queued', 'extracting', 'tokenizing', 'structural', 'semantic', 'preparing']
+    let milestone = 0
+    await page.route('**/api/jobs/*', async route => {
+      const response = await route.fetch()
+      const result = await response.json()
+      if (result.status === 'done' && milestone < stages.length) {
+        const stage = stages[milestone++]
+        await route.fulfill({ response, body: JSON.stringify({ ...result, status: stage === 'queued' ? 'queued' : 'running',
+          analysis_info: { progress: { stage, skipped_stages: [] } } }) })
+      } else await route.fulfill({ response })
+    })
     await page.getByRole('button', { name: /Run Clone Detection/ }).click()
+    const steps = page.getByRole('list', { name: 'Processing steps' })
+    for (const label of ['Queued', 'Fragments', 'Tokenizing', 'Comparing', 'Model analysis', 'Results']) {
+      await steps.locator('[aria-current="step"]').filter({ hasText: label }).waitFor({ timeout: 15000 })
+      if (label === 'Model analysis') await page.screenshot({ path: path.join(output, 'processing-running.png') })
+    }
+    await page.getByRole('heading', { name: 'Analysis Complete', exact: true }).waitFor({ timeout: 60000 })
+    assert.equal(await page.getByRole('list', { name: 'Processing steps' }).getByRole('listitem').count(), 7)
+    assert.equal(await page.getByRole('progressbar').getAttribute('aria-valuenow'), '6')
+    await page.screenshot({ path: path.join(output, 'processing-complete.png') })
+    await page.getByRole('button', { name: 'View Clone Results' }).click()
     await page.getByRole('heading', { name: 'Analysis overview' }).waitFor({ timeout: 60000 })
     assert.equal(await page.getByText('Clone analysis coverage', { exact: true }).count(), 0)
     assert(await page.getByText('Type-4 · Not checked', { exact: true }).isVisible())

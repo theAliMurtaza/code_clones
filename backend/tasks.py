@@ -75,7 +75,11 @@ def run_detection_job(self, job_id: str):
         ]
 
         # ── Run pipeline ──────────────────────────────────────────────
-        result = run_detection(uploaded, threshold=job.threshold)
+        def report_progress(progress):
+            _update_job(db, job_id, analysis_info={"progress": progress},
+                        total_fragments=progress["total_fragments"])
+
+        result = run_detection(uploaded, threshold=job.threshold, on_progress=report_progress)
 
         # ── Persist clone pairs ───────────────────────────────────────
         for pair in result.clone_pairs:

@@ -396,7 +396,14 @@ def _run_job(job_id: str, uploaded: list[UploadedFile], threshold: float):
     db = SessionLocal()  # new session for background thread
     try:
         _update_job_status(db, job_id, models.JobStatus.RUNNING)
-        result = run_detection(uploaded, threshold=threshold)
+        def report_progress(progress):
+            db.query(models.Job).filter(models.Job.id == job_id).update({
+                "analysis_info": {"progress": progress},
+                "total_fragments": progress["total_fragments"],
+            })
+            db.commit()
+
+        result = run_detection(uploaded, threshold=threshold, on_progress=report_progress)
 
         for pair in result.clone_pairs:
             db.add(models.ClonePair(
