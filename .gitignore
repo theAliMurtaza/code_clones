@@ -1,13 +1,22 @@
+
 # Frontend
 frontend/node_modules/
 frontend/dist/
 frontend/.ui-checks/
 frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# VS Code Extension
+vscode-extension/node_modules/
+vscode-extension/out/
+vscode-extension/.vscode-test/
 
 # Python
 backend/.venv/
 backend/venv/
 backend/.venv311/
+backend/.venv-hf/
 backend/__pycache__/
 backend/**/*.py[cod]
 
@@ -15,13 +24,23 @@ backend/**/*.py[cod]
 backend/.env
 backend/deploy/.env
 backend/deploy/.laptop-model/
+backend/deploy/.hf-space*/
 *.sqlite3
 backend/training_runs/
 backend/saved_models/
 backend/data/
-backend/.venv-hf/
-backend/deploy/.hf-space*/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Node.js
+node_modules/
+**/node_modules/
 
 # Editor and OS files
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,46 @@
+{
+  "name": "clonescope",
+  "displayName": "CloneScope",
+  "description": "Detect copied and structurally similar code in the active file or workspace.",
+  "version": "0.1.0",
+  "publisher": "ali-eng",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/theAliMurtaza/code_clones" },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Linters", "Other"],
+  "activationEvents": [
+    "onCommand:clonescope.analyzeActiveFile",
+    "onCommand:clonescope.analyzeWorkspace",
+    "onCommand:clonescope.signIn",
+    "onView:clonescope.results"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "clonescope.signIn", "title": "CloneScope: Sign In" },
+      { "command": "clonescope.signOut", "title": "CloneScope: Sign Out" },
+      { "command": "clonescope.analyzeActiveFile", "title": "CloneScope: Analyze Active File" },
+      { "command": "clonescope.analyzeWorkspace", "title": "CloneScope: Analyze Workspace" },
+      { "command": "clonescope.showResults", "title": "CloneScope: Show Latest Results" }
+    ],
+    "menus": {
+      "editor/title": [
+        { "command": "clonescope.analyzeActiveFile", "when": "resourceExtname == .py || resourceExtname == .java || resourceExtname == .c || resourceExtname == .h", "group": "navigation@20" }
+      ],
+      "explorer/context": [
+        { "command": "clonescope.analyzeWorkspace", "when": "resourceScheme == file", "group": "navigation@20" }
+      ]
+    },
+    "views": { "explorer": [{ "id": "clonescope.results", "name": "CloneScope" }] },
+    "configuration": {
+      "title": "CloneScope",
+      "properties": {
+        "clonescope.apiBaseUrl": { "type": "string", "default": "https://code-clones.onrender.com", "description": "CloneScope API base URL." },
+        "clonescope.similarityThreshold": { "type": "number", "default": 0.75, "minimum": 0.3, "maximum": 0.99, "description": "Minimum clone similarity sent to CloneScope." },
+        "clonescope.maxFiles": { "type": "number", "default": 200, "minimum": 2, "maximum": 500, "description": "Maximum supported source files sent by a workspace scan." }
+      }
+    }
+  },
+  "scripts": { "compile": "tsc -p ./", "watch": "tsc -watch -p ./", "package": "npm run compile && vsce package --no-dependencies", "test": "npm run compile" },
+  "devDependencies": { "@types/node": "^20.11.30", "@types/vscode": "^1.85.0", "@vscode/vsce": "^3.2.1", "typescript": "^5.4.5" }
+}

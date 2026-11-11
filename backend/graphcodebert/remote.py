@@ -5,6 +5,7 @@ import httpx
 import numpy as np
 
 from config import get_settings
+from graphcodebert.training_artifact import SUPPORTED_LANGUAGE_PAIRS
 
 
 class RemoteSemanticEngine:
@@ -36,7 +37,7 @@ class RemoteSemanticEngine:
                  or not 0 < self.classifier_threshold <= 1)):
             raise RuntimeError('Invalid remote classifier threshold')
         if (not isinstance(self.validated_language_pairs, list)
-                or any(p not in ['java:java', 'python:python', 'java:python']
+                or any(p not in SUPPORTED_LANGUAGE_PAIRS
                        for p in self.validated_language_pairs)
                 or (self.validated_language_pairs and
                     (not self.is_fine_tuned or self.classifier_threshold is None))):

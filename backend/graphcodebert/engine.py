@@ -189,6 +189,7 @@ class GraphCodeBERTEngine:
             from tree_sitter import Language, Parser as TSParser
             import tree_sitter_python as tsp
             import tree_sitter_java   as tsj
+            import tree_sitter_c      as tsc
 
             sys.path.insert(0, str(_HERE))
             from parser.DFG import DFG_python, DFG_java
@@ -196,6 +197,11 @@ class GraphCodeBERTEngine:
             for lang_name, lang_module, dfg_fn in [
                 ("python", tsp, DFG_python),
                 ("java",   tsj, DFG_java),
+                # GraphCodeBERT has no published C data-flow extractor.  The
+                # tokenizer/tree parser still give a stable code representation
+                # for an explicitly evaluated C:C head, while the empty DFG
+                # avoids fabricating data-flow edges.
+                ("c",      tsc, None),
             ]:
                 try:
                     ts_lang = Language(lang_module.language())
@@ -244,7 +250,7 @@ class GraphCodeBERTEngine:
             code_tokens = [index_to_code_token(x, lines) for x in tok_idx]
             idx2code    = {idx: (i, c) for i, (idx, c) in enumerate(zip(tok_idx, code_tokens))}
             try:
-                dfg, _ = parser[1](root, idx2code, {})
+                dfg, _ = parser[1](root, idx2code, {}) if parser[1] is not None else ([], {})
             except Exception:
                 dfg = []
             dfg  = sorted(dfg, key=lambda x: x[1])

@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 
 FORMAT = 'graphcodebert-symmetric-head-v1'
+SUPPORTED_LANGUAGE_PAIRS = frozenset({'java:java', 'python:python', 'java:python', 'c:c'})
 
 
 def file_hash(path):
@@ -26,7 +27,7 @@ def load_head_artifact(path):
     if type(threshold) not in (int, float) or not math.isfinite(threshold) or not 0 < threshold <= 1:
         raise ValueError('Invalid classifier threshold')
     pairs = metadata.get('validated_language_pairs')
-    if not pairs or any(p not in ['java:java', 'python:python', 'java:python'] for p in pairs):
+    if not pairs or any(p not in SUPPORTED_LANGUAGE_PAIRS for p in pairs):
         raise ValueError('No supported evaluated language pairs')
     if file_hash(path) != metadata.get('weights_sha256'):
         raise ValueError('Checkpoint weights do not match evaluation metadata')

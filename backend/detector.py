@@ -17,6 +17,18 @@ from itertools import combinations
 
 logger   = logging.getLogger(__name__)
 settings = get_settings()
+# The base GraphCodeBERT service is limited to these languages.  C/header files
+# are always scanned structurally; C Type-4 is enabled only after a separately
+# evaluated C:C classifier artifact has been deployed.
+BASE_SEMANTIC_LANGUAGES = frozenset({'python', 'java'})
+
+
+def _base_semantic_pair(a: Fragment, b: Fragment) -> bool:
+    return {a.language, b.language} <= BASE_SEMANTIC_LANGUAGES
+
+
+def _linux_c_pair(a: Fragment, b: Fragment) -> bool:
+    return a.language == b.language == 'c'
 
 @dataclass
 class UploadedFile:
@@ -120,22 +132,9 @@ def run_detection(files: list, threshold: float = None, engine=None, on_progress
         return result
 
     progress("structural")
-    if engine is None:
-        from graphcodebert.engine import get_engine
-        engine = get_engine()
-    semantic_available = engine.is_fine_tuned or getattr(engine, "supports_semantics", False)
-    result.mode = ("classifier" if engine.is_fine_tuned else
-                   "embedding" if semantic_available else "structural")
-    if semantic_available:
-        result.semantic_threshold = max(threshold, settings.TYPE4_SEM_SIM if engine.is_fine_tuned
-                                        else settings.TYPE4_EMBEDDING_SIM)
-        if engine.is_fine_tuned and getattr(engine, 'classifier_threshold', None) is not None:
-            result.semantic_threshold = max(result.semantic_threshold, engine.classifier_threshold)
-        if not engine.is_fine_tuned:
-            result.semantic_corroborated_threshold = max(threshold, settings.TYPE4_CORROBORATED_EMBEDDING_SIM)
     parameterized = [parameterize_tokens(f.code, f.language) for f in fragments]
     substantive = [near_miss_tokens(t, p) for t, p in zip(tokens, parameterized)]
-    scored, semantic_candidates, semantic_evidence = {}, [], {}
+    scored, pending_semantic, semantic_evidence = {}, [], {}
     for i, j in candidates:
         a, b = fragments[i], fragments[j]
         tok = SequenceMatcher(None, tokens[i], tokens[j], autojunk=False).ratio()
@@ -149,8 +148,39 @@ def run_detection(files: list, threshold: float = None, engine=None, on_progress
                 ctype = "Type-3"
         if ctype and score >= threshold:
             scored[(i, j)] = (ctype, score, tok)
-        if ctype is None and semantic_available:
-            semantic_candidates.append((i, j))
+        # Do not invoke the model for already-established Types 1–3. C copied
+        # code therefore works even while the optional semantic server is down.
+        if ctype is None and (_base_semantic_pair(a, b)
+                              or (settings.ENABLE_LINUX_C_CLASSIFIER and _linux_c_pair(a, b))):
+            pending_semantic.append((i, j))
+
+    # Load the semantic server only if a pair could benefit from it. This keeps
+    # Linux C/header Type-1–3 analysis fully available without a model service.
+    semantic_candidates = []
+    semantic_available = False
+    if pending_semantic:
+        if engine is None:
+            from graphcodebert.engine import get_engine
+            engine = get_engine()
+        semantic_available = engine.is_fine_tuned or getattr(engine, "supports_semantics", False)
+        if semantic_available:
+            c_supported = (engine.is_fine_tuned
+                           and 'c:c' in getattr(engine, 'validated_language_pairs', []))
+            semantic_candidates = [
+                (i, j) for i, j in pending_semantic
+                if _base_semantic_pair(fragments[i], fragments[j])
+                or (settings.ENABLE_LINUX_C_CLASSIFIER and c_supported
+                    and _linux_c_pair(fragments[i], fragments[j]))
+            ]
+    result.mode = ("classifier" if semantic_available and engine.is_fine_tuned else
+                   "embedding" if semantic_available else "structural")
+    if semantic_available:
+        result.semantic_threshold = max(threshold, settings.TYPE4_SEM_SIM if engine.is_fine_tuned
+                                        else settings.TYPE4_EMBEDDING_SIM)
+        if engine.is_fine_tuned and getattr(engine, 'classifier_threshold', None) is not None:
+            result.semantic_threshold = max(result.semantic_threshold, engine.classifier_threshold)
+        if not engine.is_fine_tuned:
+            result.semantic_corroborated_threshold = max(threshold, settings.TYPE4_CORROBORATED_EMBEDDING_SIM)
 
     if semantic_candidates:
         progress("semantic")
@@ -166,19 +196,23 @@ def run_detection(files: list, threshold: float = None, engine=None, on_progress
     # semantically equivalent implementations can have very different tokens.
     similarities = None
     if semantic_candidates and not engine.is_fine_tuned:
-        vectors = np.asarray(engine.embed_batch([f.code for f in fragments],
-                                               [f.language for f in fragments]))
-        if vectors.ndim != 2 or len(vectors) != len(fragments) or not np.all(np.isfinite(vectors)):
+        semantic_indices = sorted({index for pair in semantic_candidates for index in pair})
+        vectors = np.asarray(engine.embed_batch([fragments[index].code for index in semantic_indices],
+                                               [fragments[index].language for index in semantic_indices]))
+        if vectors.ndim != 2 or len(vectors) != len(semantic_indices) or not np.all(np.isfinite(vectors)):
             raise RuntimeError("The semantic model returned invalid embeddings")
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
         if np.any(norms <= 1e-9):
             raise RuntimeError("The semantic model returned empty embeddings")
         normalized = vectors / norms
-        similarities = np.clip(normalized @ normalized.T, -1.0, 1.0)
+        vector_at = {fragment_index: vector_index
+                     for vector_index, fragment_index in enumerate(semantic_indices)}
+        similarities = {(i, j): float(np.clip(normalized[vector_at[i]] @ normalized[vector_at[j]], -1.0, 1.0))
+                        for i, j in semantic_candidates}
 
     for offset in range(0, len(semantic_candidates), 32):
         batch = semantic_candidates[offset:offset + 32]
-        probabilities = ([float(similarities[i, j]) for i, j in batch]
+        probabilities = ([similarities[i, j] for i, j in batch]
                          if similarities is not None else engine.predict_batch([
             (fragments[i].code, fragments[i].language,
              fragments[j].code, fragments[j].language) for i, j in batch

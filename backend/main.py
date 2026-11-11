@@ -226,7 +226,7 @@ async def detect(
 ):
     """
     FR-01-01 + FR-05-02: Upload files or folder of files and start async detection.
-    Extracts coding files (.py, .java), preserving directory paths.
+    Extracts supported source files, preserving directory paths.
     """
     parsed_paths: list[str] = []
     if paths_json:
@@ -261,7 +261,7 @@ async def detect(
             if len(raw) > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
                 raise HTTPException(status_code=413, detail=f"{norm_path} exceeds the file size limit")
             content = raw.decode("utf-8", errors="replace")
-            lang = {"py": "python", "java": "java"}.get(ext.lstrip("."), "unknown")
+            lang = {"py": "python", "java": "java", "c": "c", "h": "c"}.get(ext.lstrip("."), "unknown")
             valid_files_data.append((norm_path, content, lang))
 
     if not valid_files_data:
@@ -339,7 +339,7 @@ def detect_folder(
                     if full_p.stat().st_size > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
                         raise HTTPException(status_code=413, detail=f"{rel_p} exceeds the file size limit")
                     content = full_p.read_text(encoding="utf-8", errors="replace")
-                    lang = {"py": "python", "java": "java"}.get(ext.lstrip("."), "unknown")
+                    lang = {"py": "python", "java": "java", "c": "c", "h": "c"}.get(ext.lstrip("."), "unknown")
                     extracted.append((rel_p, content, lang))
                 except OSError as exc:
                     raise HTTPException(status_code=400, detail=f"Could not read {full_p}: {exc}")

@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # unless the deployment has been sized and tested for a larger value.
     BATCH_SIZE:       int  = 1
     MAX_TOKEN_LENGTH: int  = 512
+    # C is always scanned for copied/structural clones. Turn this on only after
+    # a C:C checkpoint has passed the held-out evaluation gate and is deployed
+    # to the semantic model service. It is deliberately not a UI setting.
+    ENABLE_LINUX_C_CLASSIFIER: bool = False
 
     # ── Detection thresholds ─────────────────────────────────────────
     # DEFAULT_THRESHOLD: minimum cosine similarity (embedding mode) or
@@ -68,7 +72,9 @@ class Settings(BaseSettings):
     # ── File handling ─────────────────────────────────────────────────
     MAX_FILE_SIZE_MB:    int = 10
     MAX_FRAGMENTS_PER_JOB: int = 200
-    SUPPORTED_EXTS:      str = ".py,.java"
+    # C and headers cover Linux-kernel style source automatically. There is no
+    # separate user-facing mode: supported files enter the regular pipeline.
+    SUPPORTED_EXTS:      str = ".py,.java,.c,.h"
     CODE_RETENTION_DAYS: int = 30
 
     @property

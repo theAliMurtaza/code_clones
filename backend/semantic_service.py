@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class FragmentInput(BaseModel):
     code: str = Field(min_length=1, max_length=131072)
-    language: Literal["python", "java"]
+    language: Literal["python", "java", "c"]
 
 
 class EmbeddingInput(BaseModel):

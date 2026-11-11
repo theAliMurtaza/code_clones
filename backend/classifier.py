@@ -105,6 +105,12 @@ KEYWORDS.update({'INDENT', 'DEDENT', 'NEWLINE'})
 KEYWORDS.update({'byte', 'short', 'long', 'final', 'abstract', 'synchronized',
                  'throws', 'throw', 'catch', 'switch', 'case', 'default',
                  'package', 'instanceof', 'enum', 'assert', 'do'})
+KEYWORDS.update({'auto', 'break', 'case', 'char', 'const', 'continue', 'default',
+                 'do', 'double', 'else', 'enum', 'extern', 'float', 'for', 'goto',
+                 'if', 'inline', 'int', 'long', 'register', 'restrict', 'return',
+                 'short', 'signed', 'sizeof', 'static', 'struct', 'switch',
+                 'typedef', 'union', 'unsigned', 'void', 'volatile', 'while',
+                 '_Bool', '_Complex', '_Imaginary', 'NULL', 'true', 'false'})
 
 
 def parameterize_tokens(code: str, language: str = "python") -> list[str]:

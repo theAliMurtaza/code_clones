@@ -28,10 +28,11 @@ scikit-learn==1.5.0
 faiss-cpu==1.8.0
 
 # ── Code parsing — IMPORTANT: use these exact versions for Python 3.12+
-# tree-sitter 0.22.6 does not exist; 0.21.0 language packs require Python<3.12
-tree-sitter==0.24.0
+# C grammar 0.24 uses language ABI 15, which requires tree-sitter >=0.25.
+tree-sitter==0.25.0
 tree-sitter-python==0.23.6
 tree-sitter-java==0.23.5
+tree-sitter-c==0.24.0
 
 # ── Utilities ─────────────────────────────────────────────────────────
 python-dotenv==1.0.1

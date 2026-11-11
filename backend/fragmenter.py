@@ -1,10 +1,10 @@
 """
 fragmenter.py
 Splits source code into meaningful fragments (functions, methods, classes)
-using tree-sitter 0.24.x with per-language grammar packages.
+using tree-sitter 0.25.x with per-language grammar packages.
 
 Compatible with:
-  tree-sitter       == 0.24.0
+  tree-sitter       == 0.25.0
   tree-sitter-python == 0.23.6
   tree-sitter-java   == 0.23.5
   Python             >= 3.12
@@ -44,21 +44,24 @@ class Fragment:
 _ts_available = False
 _PY_LANG      = None
 _JAVA_LANG    = None
+_C_LANG       = None
 
 
 def _load_tree_sitter() -> bool:
-    global _ts_available, _PY_LANG, _JAVA_LANG
+    global _ts_available, _PY_LANG, _JAVA_LANG, _C_LANG
     if _ts_available:
         return True
     try:
         from tree_sitter import Language, Parser
         import tree_sitter_python as tsp
         import tree_sitter_java  as tsj
+        import tree_sitter_c     as tsc
 
         _PY_LANG   = Language(tsp.language())
         _JAVA_LANG = Language(tsj.language())
+        _C_LANG    = Language(tsc.language())
         _ts_available = True
-        logger.info("tree-sitter 0.24 loaded (Python + Java grammars ready)")
+        logger.info("tree-sitter 0.24 loaded (Python, Java + C grammars ready)")
         return True
     except Exception as exc:
         logger.warning(f"tree-sitter unavailable ({exc}), using source blocks")
@@ -80,13 +83,14 @@ def _make_parser(lang_obj):
 
 def _extract_ts(source: str, language: str, filename: str) -> list[Fragment]:
     """Extract fragments using tree-sitter (precise, line-accurate)."""
-    lang_obj = _PY_LANG if language == "python" else _JAVA_LANG
+    lang_obj = {"python": _PY_LANG, "java": _JAVA_LANG, "c": _C_LANG}[language]
     parser   = _make_parser(lang_obj)
     tree     = parser.parse(bytes(source, "utf-8", errors="replace"))
     lines    = source.splitlines()
 
     # Walking nodes avoids the incompatible Query APIs in tree-sitter releases.
-    wanted = {"function_definition", "method_declaration", "constructor_declaration"}
+    wanted = ({"function_definition"} if language == "c"
+              else {"function_definition", "method_declaration", "constructor_declaration"})
     nodes, pending = [], [tree.root_node]
     while pending:
         node = pending.pop()
@@ -108,10 +112,13 @@ def _extract_ts(source: str, language: str, filename: str) -> list[Fragment]:
 
         # Try to get fragment name from first identifier child
         name = ""
-        for child in node.children:
+        pending_name = list(reversed(node.children))
+        while pending_name:
+            child = pending_name.pop()
             if child.type in ("identifier", "name"):
                 name = source.encode("utf-8")[child.start_byte : child.end_byte].decode("utf-8")
                 break
+            pending_name.extend(reversed(child.children))
 
         fragments.append(Fragment(
             code       = code,
@@ -128,7 +135,7 @@ def _extract_ts(source: str, language: str, filename: str) -> list[Fragment]:
 # ── Public API ─────────────────────────────────────────────────────────
 def detect_language(filename: str) -> str | None:
     ext = filename.rsplit(".", 1)[-1].lower()
-    return {"py": "python", "java": "java"}.get(ext)
+    return {"py": "python", "java": "java", "c": "c", "h": "c"}.get(ext)
 
 
 def extract_fragments(source: str, filename: str) -> list[Fragment]:

@@ -1,4 +1,5 @@
-export const SUPPORTED_EXTS = ['.py', '.java']
+// Kept as one automatic source-file list: there is no separate Linux mode.
+export const SUPPORTED_EXTS = ['.py', '.java', '.c', '.h']
 
 export const CLONE_TYPE_META = {
   'Type-1': { label: 'Exact Clone',    color: '#059669', desc: 'Identical code — only whitespace or comments differ' },
