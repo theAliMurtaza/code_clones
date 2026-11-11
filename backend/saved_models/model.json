@@ -1,0 +1,55 @@
+{
+  "format": "graphcodebert-symmetric-head-v1",
+  "encoder": "microsoft/graphcodebert-base",
+  "training_mode": "frozen_encoder_trained_pair_head_c_without_published_c_dfg",
+  "threshold": 0.5185379981994629,
+  "selected_epoch": 1,
+  "validation": {
+    "tp": 110,
+    "fp": 0,
+    "fn": 0,
+    "tn": 110,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "precision_wilson_lower_95": 0.9662548664108728,
+    "examples": 220
+  },
+  "test": {
+    "tp": 110,
+    "fp": 0,
+    "fn": 0,
+    "tn": 110,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "precision_wilson_lower_95": 0.9662548664108728,
+    "examples": 220
+  },
+  "target_precision": 0.8,
+  "min_recall": 0.4,
+  "eligible_for_serving": true,
+  "gate_failures": [],
+  "validated_language_pairs": [
+    "c:c"
+  ],
+  "weights_sha256": "ab096e67a4515c71307e37b6cec978300e2dbb225654874457777d28a2ea4c93",
+  "pair_counts": {
+    "train": {
+      "1": 110,
+      "0": 110
+    },
+    "valid": {
+      "1": 110,
+      "0": 110
+    },
+    "test": {
+      "1": 110,
+      "0": 110
+    }
+  },
+  "encoded_functions": 1320,
+  "excluded_functions": 0,
+  "elapsed_seconds": 193.0,
+  "limitations": "Evaluation applies only to the labelled Linux C source distribution. It is a clone classifier, not a proof of behavior equivalence."
+}

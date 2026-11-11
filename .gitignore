@@ -27,7 +27,8 @@ backend/deploy/.laptop-model/
 backend/deploy/.hf-space*/
 *.sqlite3
 backend/training_runs/
-backend/saved_models/
+!backend/saved_models/
+!backend/saved_models/**
 backend/data/
 
 # Environment variables
